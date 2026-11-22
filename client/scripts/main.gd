@@ -3,6 +3,7 @@ extends Node3D
 const SimulationConfigType: GDScript = preload("res://shared/data/simulation_config.gd")
 const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simulation.gd")
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
+const PlayerBodyAdapterType: GDScript = preload("res://client/scripts/player_body_adapter.gd")
 
 @onready var status_label: Label = $StatusCanvas/StatusPanel/StatusLabel
 @onready var hint_label: Label = $StatusCanvas/HintLabel
@@ -59,9 +60,10 @@ func _physics_process(delta: float) -> void:
 		max_input_magnitude,
 		float(_simulation_config["world_half_extent"]),
 	)
-	var local_view: Node3D = _player_views.get(_local_player_id)
+	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view != null:
-		local_view.position = _predicted_position
+		local_view.move_to_simulated_position(_predicted_position, delta)
+		_predicted_position = local_view.global_position
 
 	_input_send_accumulator += delta
 	if _input_send_accumulator >= float(_simulation_config["input_send_interval_seconds"]):
@@ -73,7 +75,7 @@ func _physics_process(delta: float) -> void:
 
 func _process(_delta: float) -> void:
 	_render_snapshot_buffer()
-	var local_view: Node3D = _player_views.get(_local_player_id)
+	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view != null:
 		camera.global_position = local_view.global_position + Vector3(
 			0.0,
@@ -125,7 +127,8 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		_ensure_player_view(player_id)
 		if player_id == _local_player_id and not _has_authoritative_position:
 			_predicted_position = position
-			_player_views[player_id].position = position
+			var local_player_view: PlayerBodyAdapter = _player_views[player_id]
+			local_player_view.set_simulated_position(position)
 			_has_authoritative_position = true
 
 	var snapshot_record: Dictionary = {
@@ -140,7 +143,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var existing_player_ids: Array = _player_views.keys()
 	for player_id: int in existing_player_ids:
 		if not positions.has(player_id):
-			var player_view: Node3D = _player_views[player_id]
+			var player_view: PlayerBodyAdapter = _player_views[player_id]
 			player_view.queue_free()
 			_player_views.erase(player_id)
 
@@ -180,14 +183,14 @@ func _render_snapshot_buffer() -> void:
 	var latest_positions: Dictionary = _snapshot_buffer[_snapshot_buffer.size() - 1]["positions"]
 
 	for player_id: int in _player_views:
-		var player_view: Node3D = _player_views[player_id]
+		var player_view: PlayerBodyAdapter = _player_views[player_id]
 		if not newer_positions.has(player_id):
 			continue
 		var newer_position: Vector3 = newer_positions[player_id]
 		if player_id == _local_player_id:
 			var correction_factor: float = float(_simulation_config["local_reconciliation_factor"])
 			_predicted_position = _predicted_position.lerp(latest_positions[player_id], correction_factor)
-			player_view.position = _predicted_position
+			player_view.set_simulated_position(_predicted_position)
 			continue
 		var older_position: Vector3 = older_positions.get(player_id, newer_position)
 		player_view.position = older_position.lerp(newer_position, interpolation_alpha)
@@ -197,16 +200,26 @@ func _ensure_player_view(player_id: int) -> void:
 	if _player_views.has(player_id):
 		return
 
-	var player_view: Node3D = Node3D.new()
+	var player_view: PlayerBodyAdapter = PlayerBodyAdapterType.new()
 	player_view.name = "Player_%d" % player_id
+	player_view.collision_layer = 0
+	player_view.collision_mask = 0
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
 	var capsule: CapsuleMesh = CapsuleMesh.new()
 	capsule.radius = float(_simulation_config["player_visual_radius"])
 	capsule.height = float(_simulation_config["player_visual_height"])
 	mesh_instance.mesh = capsule
 	mesh_instance.material_override = StandardMaterial3D.new()
+	mesh_instance.name = "Visual"
 	mesh_instance.position.y = capsule.height / 2.0
 	player_view.add_child(mesh_instance)
+	var collision_shape: CollisionShape3D = CollisionShape3D.new()
+	var capsule_shape: CapsuleShape3D = CapsuleShape3D.new()
+	capsule_shape.radius = float(_simulation_config["player_visual_radius"])
+	capsule_shape.height = float(_simulation_config["player_visual_height"])
+	collision_shape.shape = capsule_shape
+	collision_shape.position.y = capsule_shape.height / 2.0
+	player_view.add_child(collision_shape)
 	add_child(player_view)
 	_player_views[player_id] = player_view
 	var color: Color = Color(0.25, 0.7, 0.95)
@@ -216,9 +229,9 @@ func _ensure_player_view(player_id: int) -> void:
 
 
 func _set_player_color(player_id: int, color: Color) -> void:
-	var player_view: Node3D = _player_views.get(player_id)
+	var player_view: PlayerBodyAdapter = _player_views.get(player_id)
 	if player_view == null:
 		return
-	var mesh_instance: MeshInstance3D = player_view.get_child(0)
-	var material: StandardMaterial3D = mesh_instance.material_override as StandardMaterial3D
+	var mesh_instance: MeshInstance3D = player_view.get_node("Visual")
+	var material: StandardMaterial3D = mesh_instance.material_override
 	material.albedo_color = color

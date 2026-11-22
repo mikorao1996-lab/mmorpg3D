@@ -117,4 +117,6 @@
 - Дополнительно прошли project import, unit tests (`UNIT_TESTS_OK`) и запуск headless-сервера на UDP/7788.
 - Phase 3: добавлен серверный player registry и per-player interest management; каждый unreliable snapshot содержит только игроков в радиусе `interest_radius` (10 единиц по умолчанию) и всегда включает получателя. Disconnect удаляет игрока из registry и следующих snapshots.
 - Unit-тест проверяет AOI-границу, обязательную видимость самого игрока и удаление сущности; integration с двумя production-клиентами продолжает проходить (`WORLD_LOOPBACK_OK`).
-- Phase 3 остаётся в работе: отдельный `CharacterBody3D` adapter ещё не добавлен; текущий milestone — server-authoritative sandbox, а не полный gameplay-срез.
+- Phase 3: добавлен клиентский `CharacterBody3D` adapter. Локальная shared-симуляция задаёт целевую позицию, adapter применяет перемещение через `move_and_slide()`, удалённые тела интерполируются напрямую из snapshots. Сетевая authority и shared simulation остаются вне клиентского physics layer.
+- Клиентский headless smoke test сцены прошёл при работающем headless-сервере; персонажи пока не сталкиваются друг с другом, чтобы клиентская физика не расходилась с серверной симуляцией.
+- Phase 3 остаётся в работе: сейчас используется одна in-memory зона без multi-zone routing; текущий milestone — server-authoritative sandbox, а не полный gameplay-срез.

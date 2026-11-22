@@ -42,7 +42,10 @@ Both clients connect to `127.0.0.1:7788`. Use **WASD** to move; each client
 shows both players, predicts its own movement, and interpolates server snapshots.
 The server filters snapshots by the configured `interest_radius` (10 world units
 by default) and always includes the observing player. Close the server with
-`Ctrl+C` when finished.
+`Ctrl+C` when finished. Client player bodies use `CharacterBody3D` as a platform
+adapter: the shared movement simulation still determines target positions, while
+remote players are interpolated from snapshots. Player collision layers are
+disabled until collision rules are authoritative on the server.
 
 ## Unit checks
 
