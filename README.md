@@ -19,10 +19,10 @@ The main client scene is `client/scenes/main.tscn`.
 ## Headless server
 
 ```powershell
-godot --headless --path D:\Dev\mmorpg3D --script server/main/server_bootstrap.gd
+godot --headless --path D:\Dev\mmorpg3D --scene res://server/main/server_main.tscn
 ```
 
-The server currently provides the bootstrap and no gameplay yet.
+The server currently provides the network bootstrap on port `7788` and no gameplay yet.
 
 ## Unit checks
 

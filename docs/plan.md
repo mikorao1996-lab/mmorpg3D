@@ -106,3 +106,5 @@
 - Runtime-проверка выполнена для Godot 4.7.2: unit-tests и загрузка основной сцены прошли успешно.
 - Headless-серверный bootstrap запускается и использует проверку `DisplayServer.get_name()` для режима без дисплея.
 - Docker пока не найден в `PATH`; проверка контейнерного запуска перенесена на следующую инфраструктурную задачу.
+- Phase 2 — реализованы shared packet codec, server listener/session, ENet channels и handshake opcodes.
+- Unit-тесты packet codec проходят. Двухпроцессный handshake требует дополнительной runtime-отладки порта/headless-процесса.

@@ -1,6 +1,7 @@
 extends SceneTree
 
 const PROJECT_LOGGER: GDScript = preload("res://shared/logging/project_logger.gd")
+var server_listener: RefCounted
 
 
 func _initialize() -> void:
@@ -11,7 +12,12 @@ func _initialize() -> void:
 		return
 
 	PROJECT_LOGGER.log_info("Server bootstrap initialized")
+	server_listener = load("res://server/net/server_listener.gd").new()
+	if not server_listener.start():
+		quit(2)
 
 
-func _process(_delta: float) -> bool:
+func _process(delta: float) -> bool:
+	if server_listener != null:
+		server_listener.poll()
 	return false
