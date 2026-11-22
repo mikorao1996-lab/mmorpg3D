@@ -103,4 +103,6 @@
 
 - Phase 0: завершена для стартового bootstrap. Зафиксированы Godot 4.7+, Windows для разработки и Linux/Docker для сервера.
 - Phase 1: добавлены `project.godot`, entry point клиента, headless bootstrap сервера, protocol constants, unit-check и базовые docs.
-- Runtime-проверка ожидает установки Godot на рабочей машине. Godot и Docker пока не найдены в `PATH`.
+- Runtime-проверка выполнена для Godot 4.7.2: unit-tests и загрузка основной сцены прошли успешно.
+- Headless-серверный bootstrap запускается и использует проверку `DisplayServer.get_name()` для режима без дисплея.
+- Docker пока не найден в `PATH`; проверка контейнерного запуска перенесена на следующую инфраструктурную задачу.

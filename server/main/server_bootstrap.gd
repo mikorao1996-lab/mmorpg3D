@@ -4,7 +4,8 @@ const PROJECT_LOGGER: GDScript = preload("res://shared/logging/project_logger.gd
 
 
 func _initialize() -> void:
-	if not OS.has_feature("headless"):
+	var display_server_name: String = DisplayServer.get_name().to_lower()
+	if display_server_name != "headless":
 		push_error("Server bootstrap must be launched with --headless")
 		quit(2)
 		return
