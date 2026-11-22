@@ -20,6 +20,8 @@ const OPCODE_MOVE_INPUT: int = 6
 const OPCODE_WORLD_SNAPSHOT: int = 7
 const OPCODE_ZONE_TRANSFER: int = 8
 const OPCODE_ZONE_TRANSFER_RESULT: int = 9
+const OPCODE_ABILITY_CAST: int = 10
+const OPCODE_ABILITY_CAST_RESULT: int = 11
 
 
 static func to_transport_channel(protocol_channel: int) -> int:

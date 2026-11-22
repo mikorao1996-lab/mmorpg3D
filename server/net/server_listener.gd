@@ -5,6 +5,7 @@ signal player_authenticated(peer_id: int)
 signal player_disconnected(peer_id: int)
 signal movement_intent(peer_id: int, input_direction: Vector2)
 signal zone_transfer_requested(peer_id: int, zone_id: String)
+signal ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: String)
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
@@ -81,6 +82,8 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 		handle_movement_intent(session, peer_id, payload)
 	elif opcode == ProtocolConstantsType.OPCODE_ZONE_TRANSFER:
 		handle_zone_transfer(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_ABILITY_CAST:
+		handle_ability_cast(session, peer_id, payload)
 	else:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
@@ -126,6 +129,23 @@ func handle_zone_transfer(session: RefCounted, peer_id: int, payload: Dictionary
 	zone_transfer_requested.emit(peer_id, zone_id_value)
 
 
+func handle_ability_cast(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("Ability cast before authentication from peer %d" % peer_id)
+		return
+	var ability_id_value: Variant = payload.get("ability_id")
+	var target_mob_id_value: Variant = payload.get("target_mob_id")
+	if (
+		ability_id_value is not String
+		or ability_id_value.strip_edges().is_empty()
+		or target_mob_id_value is not String
+		or target_mob_id_value.strip_edges().is_empty()
+	):
+		push_warning("Rejected malformed ability cast from peer %d" % peer_id)
+		return
+	ability_cast_requested.emit(peer_id, ability_id_value, target_mob_id_value)
+
+
 func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
 	for peer_id: int in sessions:
 		var session: RefCounted = sessions[peer_id]
@@ -166,6 +186,22 @@ func send_zone_transfer_result(
 	)
 	if send_error != OK:
 		push_warning("Failed to send zone transfer result to peer %d: %s" % [peer_id, send_error])
+
+
+func send_ability_cast_result(peer_id: int, result: Dictionary) -> void:
+	if not sessions.has(peer_id):
+		push_warning("Cannot send ability cast result to missing peer %d" % peer_id)
+		return
+	var session: RefCounted = sessions[peer_id]
+	if not session.authenticated:
+		push_warning("Cannot send ability cast result to unauthenticated peer %d" % peer_id)
+		return
+	var send_error: Error = session.send(
+		ProtocolConstantsType.OPCODE_ABILITY_CAST_RESULT,
+		result,
+	)
+	if send_error != OK:
+		push_warning("Failed to send ability cast result to peer %d: %s" % [peer_id, send_error])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

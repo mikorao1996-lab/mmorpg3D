@@ -2,15 +2,19 @@ extends RefCounted
 
 const ServerWorldType: GDScript = preload("res://server/world/server_world.gd")
 const SimulationConfigType: GDScript = preload("res://shared/data/simulation_config.gd")
+const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 
 
 func run() -> bool:
 	var config: Dictionary = SimulationConfigType.load_config()
 	if config.is_empty():
 		return false
+	var game_data_registry: Dictionary = GameDataRegistryType.load_all()
+	if game_data_registry.is_empty():
+		return false
 	config["world_half_extent"] = 14.0
 
-	var server_world: RefCounted = ServerWorldType.new(config)
+	var server_world: RefCounted = ServerWorldType.new(config, game_data_registry)
 	for peer_id: int in range(1, 6):
 		server_world.add_player(peer_id)
 
@@ -28,6 +32,46 @@ func run() -> bool:
 		return false
 	if _snapshot_has_player(first_players, 5):
 		push_error("Interest snapshot included a player outside the configured radius")
+		return false
+	var mob_entries: Variant = first_snapshot.get("mobs", null)
+	if not mob_entries is Array or mob_entries.is_empty():
+		push_error("Server world snapshot is missing mob state")
+		return false
+
+	var successful_cast: Dictionary = server_world.cast_ability(
+		1,
+		"starter_slash",
+		"training_slime",
+	)
+	if not successful_cast["accepted"] or not is_equal_approx(successful_cast["health"], 22.0):
+		push_error("Server world did not apply the configured ability damage")
+		return false
+	var cooldown_rejection: Dictionary = server_world.cast_ability(
+		1,
+		"starter_slash",
+		"training_slime",
+	)
+	if cooldown_rejection["accepted"] or cooldown_rejection["reason"] != "cooldown":
+		push_error("Server world did not enforce the ability cooldown")
+		return false
+	var range_rejection: Dictionary = server_world.cast_ability(
+		2,
+		"starter_slash",
+		"training_slime",
+	)
+	if range_rejection["accepted"] or range_rejection["reason"] != "out_of_range":
+		push_error("Server world did not enforce ability range")
+		return false
+	var unknown_ability_rejection: Dictionary = server_world.cast_ability(
+		1,
+		"unknown_ability",
+		"training_slime",
+	)
+	if (
+		unknown_ability_rejection["accepted"]
+		or unknown_ability_rejection["reason"] != "unknown_ability"
+	):
+		push_error("Server world accepted an unregistered ability")
 		return false
 
 	if not server_world.move_player_to_zone(2, "dungeon"):

@@ -28,11 +28,15 @@ func _ready() -> void:
 
 	PROJECT_LOGGER.log_info("Server bootstrap initialized")
 	server_listener = load("res://server/net/server_listener.gd").new()
-	server_world = load("res://server/world/server_world.gd").new(simulation_config)
+	server_world = load("res://server/world/server_world.gd").new(
+		simulation_config,
+		game_data_registry,
+	)
 	server_listener.player_authenticated.connect(server_world.add_player)
 	server_listener.player_disconnected.connect(server_world.remove_player)
 	server_listener.movement_intent.connect(_on_movement_intent)
 	server_listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
+	server_listener.ability_cast_requested.connect(_on_ability_cast_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
 
@@ -55,3 +59,8 @@ func _on_zone_transfer_requested(peer_id: int, zone_id: String) -> void:
 	server_listener.send_zone_transfer_result(peer_id, zone_id, accepted, reason)
 	if not accepted:
 		push_warning("Rejected transfer for peer %d to unknown zone %s" % [peer_id, zone_id])
+
+
+func _on_ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: String) -> void:
+	var result: Dictionary = server_world.cast_ability(peer_id, ability_id, target_mob_id)
+	server_listener.send_ability_cast_result(peer_id, result)

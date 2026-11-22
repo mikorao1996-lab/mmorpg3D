@@ -10,6 +10,13 @@ signal hello_accepted(protocol: int, player_id: int)
 signal hello_rejected(reason: String)
 signal world_snapshot(snapshot: Dictionary)
 signal zone_transfer_completed(zone_id: String, accepted: bool, reason: String)
+signal ability_cast_completed(
+	accepted: bool,
+	reason: String,
+	mob_id: String,
+	health: float,
+	max_health: float,
+)
 
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
@@ -100,6 +107,28 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 				push_warning("Rejected malformed zone transfer result")
 				return
 			zone_transfer_completed.emit(zone_id_value, accepted_value, reason_value)
+		ProtocolConstantsType.OPCODE_ABILITY_CAST_RESULT:
+			var accepted_value: Variant = payload.get("accepted", null)
+			var reason_value: Variant = payload.get("reason", null)
+			var mob_id_value: Variant = payload.get("mob_id", null)
+			var health_value: Variant = payload.get("health", null)
+			var max_health_value: Variant = payload.get("max_health", null)
+			if (
+				accepted_value is not bool
+				or reason_value is not String
+				or mob_id_value is not String
+				or not _is_number(health_value)
+				or not _is_number(max_health_value)
+			):
+				push_warning("Rejected malformed ability cast result")
+				return
+			ability_cast_completed.emit(
+				accepted_value,
+				reason_value,
+				mob_id_value,
+				float(health_value),
+				float(max_health_value),
+			)
 		ProtocolConstantsType.OPCODE_KEEPALIVE_ACK:
 			pass
 
@@ -132,6 +161,17 @@ func request_zone_transfer(zone_id: String) -> Error:
 	})
 
 
+func request_ability_cast(ability_id: String, target_mob_id: String) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if ability_id.strip_edges().is_empty() or target_mob_id.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_ABILITY_CAST, {
+		"ability_id": ability_id,
+		"target_mob_id": target_mob_id,
+	})
+
+
 func send_packet(opcode: int, payload: Dictionary = {}) -> Error:
 	if peer == null:
 		return ERR_UNCONFIGURED
@@ -145,4 +185,12 @@ func send_packet(opcode: int, payload: Dictionary = {}) -> Error:
 		ProtocolConstantsType.to_transport_channel(ProtocolConstantsType.EVENT_CHANNEL),
 		packet,
 		ProtocolConstantsType.PACKET_FLAG_RELIABLE,
+	)
+
+
+func _is_number(value: Variant) -> bool:
+	var value_type: int = typeof(value)
+	return (
+		(value_type == TYPE_INT or value_type == TYPE_FLOAT)
+		and is_finite(float(value))
 	)

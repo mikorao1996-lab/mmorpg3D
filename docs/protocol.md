@@ -35,6 +35,8 @@ Opcodes:
 - `7`: `WORLD_SNAPSHOT`
 - `8`: `ZONE_TRANSFER`
 - `9`: `ZONE_TRANSFER_RESULT`
+- `10`: `ABILITY_CAST`
+- `11`: `ABILITY_CAST_RESULT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 
@@ -50,3 +52,12 @@ peers can request a transfer. The server replies reliably with
 `ZONE_TRANSFER_RESULT`, containing the requested `zone_id`, an `accepted` boolean,
 and a `reason` string (`unknown_zone` when the zone is not configured). Player
 snapshots are routed only within the player's current zone.
+
+`WORLD_SNAPSHOT` also contains a `mobs` array of
+`[mob_id, position, health, max_health]` entries for the current zone.
+`ABILITY_CAST` requests contain `ability_id` and `target_mob_id`. Only
+authenticated peers can request a cast; the server checks the registered
+ability, target, range, cooldown, and living target state before applying
+configured damage. `ABILITY_CAST_RESULT` reliably contains `accepted`, `reason`,
+`mob_id`, `health`, and `max_health`. Mob health and respawns are authoritative
+and replicated through subsequent snapshots.

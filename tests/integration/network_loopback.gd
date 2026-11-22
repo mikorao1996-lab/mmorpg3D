@@ -3,6 +3,7 @@ extends Node
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
 const SimulationConfigType: GDScript = preload("res://shared/data/simulation_config.gd")
+const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 
 var listener: RefCounted
 var server_world: RefCounted
@@ -25,10 +26,17 @@ var invalid_zone_request_sent: bool = false
 var invalid_zone_rejected: bool = false
 var primary_isolated_in_starter: bool = false
 var second_isolated_in_dungeon: bool = false
+var primary_cast_sent: bool = false
+var primary_cast_accepted: bool = false
+var cooldown_cast_sent: bool = false
+var cooldown_rejected: bool = false
+var out_of_range_cast_sent: bool = false
+var out_of_range_rejected: bool = false
 var valid_player_id: int = 0
 var second_player_id: int = 0
 var initial_local_position: Vector3 = Vector3.ZERO
 var _simulation_config: Dictionary = {}
+var _game_data_registry: Dictionary = {}
 
 
 func _ready() -> void:
@@ -36,21 +44,31 @@ func _ready() -> void:
 	if _simulation_config.is_empty():
 		get_tree().quit(1)
 		return
+	_game_data_registry = GameDataRegistryType.load_all()
+	if _game_data_registry.is_empty():
+		get_tree().quit(1)
+		return
 
 	listener = load("res://server/net/server_listener.gd").new()
 	if not listener.start(7790):
 		get_tree().quit(1)
 		return
-	server_world = load("res://server/world/server_world.gd").new(_simulation_config)
+	server_world = load("res://server/world/server_world.gd").new(
+		_simulation_config,
+		_game_data_registry,
+	)
 	listener.player_authenticated.connect(server_world.add_player)
 	listener.player_disconnected.connect(server_world.remove_player)
 	listener.movement_intent.connect(_on_movement_intent)
 	listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
+	listener.ability_cast_requested.connect(_on_ability_cast_requested)
 
 	valid_client = ClientNet.new()
 	add_child(valid_client)
 	valid_client.hello_accepted.connect(_on_valid_hello_accepted)
 	valid_client.world_snapshot.connect(_on_valid_world_snapshot)
+	valid_client.ability_cast_completed.connect(_on_primary_ability_cast_completed)
+	valid_client.ability_cast_completed.connect(_on_cooldown_cast_completed)
 	var valid_error: Error = valid_client.connect_to_server("127.0.0.1", 7790)
 	if valid_error != OK:
 		push_error("Failed to connect primary integration client: %s" % valid_error)
@@ -62,6 +80,7 @@ func _ready() -> void:
 	second_valid_client.hello_accepted.connect(_on_second_hello_accepted)
 	second_valid_client.world_snapshot.connect(_on_second_world_snapshot)
 	second_valid_client.zone_transfer_completed.connect(_on_zone_transfer_completed)
+	second_valid_client.ability_cast_completed.connect(_on_out_of_range_cast_completed)
 	var second_error: Error = second_valid_client.connect_to_server("127.0.0.1", 7790)
 	if second_error != OK:
 		push_error("Failed to connect second integration client: %s" % second_error)
@@ -94,6 +113,39 @@ func _process(delta: float) -> void:
 			get_tree().quit(1)
 			return
 		movement_sent = true
+
+	if valid_accepted and not primary_cast_sent:
+		var cast_error: Error = valid_client.request_ability_cast(
+			"starter_slash",
+			"training_slime",
+		)
+		if cast_error != OK:
+			push_error("Failed to send loopback ability cast: %s" % cast_error)
+			get_tree().quit(1)
+			return
+		primary_cast_sent = true
+
+	if primary_cast_accepted and not cooldown_cast_sent:
+		var cooldown_error: Error = valid_client.request_ability_cast(
+			"starter_slash",
+			"training_slime",
+		)
+		if cooldown_error != OK:
+			push_error("Failed to send loopback cooldown cast: %s" % cooldown_error)
+			get_tree().quit(1)
+			return
+		cooldown_cast_sent = true
+
+	if second_valid_accepted and not out_of_range_cast_sent:
+		var range_error: Error = second_valid_client.request_ability_cast(
+			"starter_slash",
+			"training_slime",
+		)
+		if range_error != OK:
+			push_error("Failed to send loopback out-of-range cast: %s" % range_error)
+			get_tree().quit(1)
+			return
+		out_of_range_cast_sent = true
 
 	if (
 		valid_accepted
@@ -131,13 +183,16 @@ func _process(delta: float) -> void:
 		and zone_transfer_applied
 		and zone_transfer_accepted
 		and invalid_zone_rejected
+		and primary_cast_accepted
+		and cooldown_rejected
+		and out_of_range_rejected
 		and primary_isolated_in_starter
 		and second_isolated_in_dungeon
 	):
-		print("ZONE_LOOPBACK_OK")
+		print("COMBAT_LOOPBACK_OK")
 		get_tree().quit(0)
 	elif elapsed_seconds > 5.0:
-		print("ZONE_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s zone_sent=%s zone_applied=%s zone_accepted=%s invalid_zone=%s isolated=%s/%s player_id=%d second_player_id=%d" % [
+		print("ZONE_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s zone_sent=%s zone_applied=%s zone_accepted=%s invalid_zone=%s combat=%s cooldown=%s out_of_range=%s isolated=%s/%s player_id=%d second_player_id=%d" % [
 			valid_accepted,
 			second_valid_accepted,
 			mismatch_rejected,
@@ -148,6 +203,9 @@ func _process(delta: float) -> void:
 			zone_transfer_applied,
 			zone_transfer_accepted,
 			invalid_zone_rejected,
+			primary_cast_accepted,
+			cooldown_rejected,
+			out_of_range_rejected,
 			primary_isolated_in_starter,
 			second_isolated_in_dungeon,
 			valid_player_id,
@@ -268,6 +326,48 @@ func _on_zone_transfer_requested(peer_id: int, zone_id: String) -> void:
 	elif zone_id == "missing" and accepted:
 		push_error("Loopback world accepted transfer to an unconfigured zone")
 		get_tree().quit(1)
+
+
+func _on_ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: String) -> void:
+	var result: Dictionary = server_world.cast_ability(peer_id, ability_id, target_mob_id)
+	listener.send_ability_cast_result(peer_id, result)
+
+
+func _on_primary_ability_cast_completed(
+	accepted: bool,
+	reason: String,
+	mob_id: String,
+	health: float,
+	max_health: float,
+) -> void:
+	if accepted:
+		primary_cast_accepted = (
+			mob_id == "training_slime"
+			and is_equal_approx(health, 22.0)
+			and is_equal_approx(max_health, 30.0)
+		)
+	elif reason != "cooldown":
+		push_error("Primary loopback ability cast was rejected: %s" % reason)
+
+
+func _on_out_of_range_cast_completed(
+	accepted: bool,
+	reason: String,
+	_mob_id: String,
+	_health: float,
+	_max_health: float,
+) -> void:
+	out_of_range_rejected = not accepted and reason == "out_of_range"
+
+
+func _on_cooldown_cast_completed(
+	accepted: bool,
+	reason: String,
+	_mob_id: String,
+	_health: float,
+	_max_health: float,
+) -> void:
+	cooldown_rejected = not accepted and reason == "cooldown"
 
 
 func _on_zone_transfer_completed(zone_id: String, accepted: bool, reason: String) -> void:

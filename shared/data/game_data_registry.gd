@@ -125,6 +125,9 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 				or not _is_number_at_least(entry.get("move_speed"), 0.0)
 				or not _is_number_at_least(entry.get("aggro_range"), 0.0)
 				or not _is_number_greater_than(entry.get("respawn_seconds"), 0.0)
+				or not _is_vector3_array(entry.get("spawn_position"))
+				or not _is_number_greater_than(entry.get("visual_radius"), 0.0)
+				or not _is_number_greater_than(entry.get("visual_height"), 0.0)
 				or not _is_string_array(entry.get("loot_item_ids"))
 			):
 				return "invalid mob fields"
@@ -198,17 +201,17 @@ static func _is_integer_at_least(value: Variant, minimum: int) -> bool:
 
 
 static func _is_number_at_least(value: Variant, minimum: float) -> bool:
-	if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
-		return false
-	var number: float = float(value)
-	return is_finite(number) and number >= minimum
+	return _is_finite_number(value) and float(value) >= minimum
 
 
 static func _is_number_greater_than(value: Variant, minimum: float) -> bool:
+	return _is_finite_number(value) and float(value) > minimum
+
+
+static func _is_finite_number(value: Variant) -> bool:
 	if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
 		return false
-	var number: float = float(value)
-	return is_finite(number) and number > minimum
+	return is_finite(float(value))
 
 
 static func _is_string_array(value: Variant) -> bool:
@@ -219,4 +222,13 @@ static func _is_string_array(value: Variant) -> bool:
 		if not _is_non_empty_string(item) or seen.has(item):
 			return false
 		seen[item] = true
+	return true
+
+
+static func _is_vector3_array(value: Variant) -> bool:
+	if not value is Array or value.size() != 3:
+		return false
+	for component: Variant in value:
+		if not _is_finite_number(component):
+			return false
 	return true

@@ -15,9 +15,15 @@ var _players: Dictionary = {}
 var _simulation_accumulator: float = 0.0
 var _snapshot_accumulator: float = 0.0
 var _next_spawn_index: int = 0
+var _mob_definitions: Dictionary = {}
+var _mobs: Dictionary = {}
 
 
-func _init(configured_zone_id: String, config: Dictionary) -> void:
+func _init(
+	configured_zone_id: String,
+	config: Dictionary,
+	game_data_registry: Dictionary,
+) -> void:
 	zone_id = configured_zone_id
 	_movement_speed = float(config["movement_speed"])
 	_max_input_magnitude = float(config["max_input_magnitude"])
@@ -26,6 +32,19 @@ func _init(configured_zone_id: String, config: Dictionary) -> void:
 	_spawn_spacing = float(config["spawn_spacing"])
 	_simulation_step_seconds = float(config["simulation_step_seconds"])
 	_snapshot_interval_seconds = float(config["snapshot_interval_seconds"])
+	_mob_definitions = game_data_registry["mobs"]
+	for mob_id: String in _mob_definitions:
+		var definition: Dictionary = _mob_definitions[mob_id]
+		var spawn_position: Array = definition["spawn_position"]
+		_mobs[mob_id] = {
+			"position": Vector3(
+				float(spawn_position[0]),
+				float(spawn_position[1]),
+				float(spawn_position[2]),
+			),
+			"health": float(definition["health"]),
+			"respawn_remaining_seconds": 0.0,
+		}
 
 
 func add_player(peer_id: int) -> void:
@@ -57,6 +76,31 @@ func get_player_position(peer_id: int) -> Vector3:
 	return player_state["position"]
 
 
+func get_mob_state(mob_id: String) -> Dictionary:
+	if not _mobs.has(mob_id):
+		return {}
+	var mob_state: Dictionary = _mobs[mob_id]
+	var mob_definition: Dictionary = _mob_definitions[mob_id]
+	return {
+		"position": mob_state["position"],
+		"health": mob_state["health"],
+		"max_health": float(mob_definition["health"]),
+	}
+
+
+func damage_mob(mob_id: String, damage: float) -> bool:
+	if not _mobs.has(mob_id) or not is_finite(damage) or damage <= 0.0:
+		return false
+	var mob_state: Dictionary = _mobs[mob_id]
+	if float(mob_state["health"]) <= 0.0:
+		return false
+	mob_state["health"] = maxf(0.0, float(mob_state["health"]) - damage)
+	if float(mob_state["health"]) == 0.0:
+		var definition: Dictionary = _mob_definitions[mob_id]
+		mob_state["respawn_remaining_seconds"] = float(definition["respawn_seconds"])
+	return true
+
+
 func set_input_direction(peer_id: int, input_direction: Vector2) -> bool:
 	if not _players.has(peer_id):
 		return false
@@ -82,12 +126,27 @@ func advance(delta: float) -> bool:
 				_max_input_magnitude,
 				_world_half_extent,
 			)
+		_advance_mob_respawns()
 		_simulation_accumulator -= _simulation_step_seconds
 		_snapshot_accumulator += _simulation_step_seconds
 		if _snapshot_accumulator >= _snapshot_interval_seconds:
 			_snapshot_accumulator -= _snapshot_interval_seconds
 			snapshot_due = true
 	return snapshot_due
+
+
+func _advance_mob_respawns() -> void:
+	for mob_id: String in _mobs:
+		var mob_state: Dictionary = _mobs[mob_id]
+		if float(mob_state["health"]) > 0.0:
+			continue
+		mob_state["respawn_remaining_seconds"] = maxf(
+			0.0,
+			float(mob_state["respawn_remaining_seconds"]) - _simulation_step_seconds,
+		)
+		if float(mob_state["respawn_remaining_seconds"]) == 0.0:
+			var definition: Dictionary = _mob_definitions[mob_id]
+			mob_state["health"] = float(definition["health"])
 
 
 func create_snapshots() -> Dictionary:
@@ -112,8 +171,21 @@ func _create_snapshot_for(observer_id: int) -> Dictionary:
 			or observer_position.distance_squared_to(player_position) <= interest_radius_squared
 		):
 			player_states.append([peer_id, player_position])
+	var mob_ids: Array = _mobs.keys()
+	mob_ids.sort()
+	var mob_states: Array = []
+	for mob_id: String in mob_ids:
+		var mob_state: Dictionary = _mobs[mob_id]
+		var mob_definition: Dictionary = _mob_definitions[mob_id]
+		mob_states.append([
+			mob_id,
+			mob_state["position"],
+			mob_state["health"],
+			float(mob_definition["health"]),
+		])
 	return {
 		"zone_id": zone_id,
 		"server_time_ms": Time.get_ticks_msec(),
 		"players": player_states,
+		"mobs": mob_states,
 	}

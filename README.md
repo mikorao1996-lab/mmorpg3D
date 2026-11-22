@@ -47,6 +47,11 @@ adapter: the shared movement simulation still determines target positions, while
 remote players are interpolated from snapshots. Player collision layers are
 disabled until collision rules are authoritative on the server.
 
+Each zone contains the configured training slime. Use **SPACE** to attack the
+nearest living mob with `starter_slash`; the server enforces target, range,
+damage, and the 1.2-second cooldown. Mob health is shown in the status panel,
+and a defeated mob respawns after its configured 8 seconds.
+
 The simulation config defines in-memory zones `starter` and `dungeon`; clients
 start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
 is available for server-validated transfers, but there is not yet a portal or
@@ -74,3 +79,5 @@ clients, and one incompatible raw client in-process. It checks both successful
 handshakes, rejection of the unsupported protocol version, presence of both
 players in world snapshots, server-side movement, a successful transfer between
 zones with isolated snapshots, and an explicit rejection for an unknown zone.
+It also verifies a server-authoritative hit, cooldown enforcement, and range
+rejection.

@@ -4,12 +4,14 @@ const SimulationConfigType: GDScript = preload("res://shared/data/simulation_con
 const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simulation.gd")
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PlayerBodyAdapterType: GDScript = preload("res://client/scripts/player_body_adapter.gd")
+const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 
 @onready var status_label: Label = $StatusCanvas/StatusPanel/StatusLabel
 @onready var hint_label: Label = $StatusCanvas/HintLabel
 @onready var camera: Camera3D = $Camera3D
 
 var _simulation_config: Dictionary = {}
+var _game_data_registry: Dictionary = {}
 var _client_net: ClientNet
 var _local_player_id: int = 0
 var _predicted_position: Vector3 = Vector3.ZERO
@@ -17,12 +19,20 @@ var _has_authoritative_position: bool = false
 var _input_send_accumulator: float = 0.0
 var _snapshot_buffer: Array[Dictionary] = []
 var _player_views: Dictionary = {}
+var _mob_states: Dictionary = {}
+var _mob_views: Dictionary = {}
+var _attack_key_down: bool = false
+var _combat_message_time_remaining: float = 0.0
 
 
 func _ready() -> void:
 	_simulation_config = SimulationConfigType.load_config()
 	if _simulation_config.is_empty():
 		status_label.text = tr("simulation_config_error")
+		return
+	_game_data_registry = GameDataRegistryType.load_all()
+	if _game_data_registry.is_empty():
+		status_label.text = tr("game_data_error")
 		return
 
 	hint_label.text = tr("controls_hint")
@@ -33,6 +43,7 @@ func _ready() -> void:
 	_client_net.hello_rejected.connect(_on_hello_rejected)
 	_client_net.disconnected.connect(_on_disconnected)
 	_client_net.world_snapshot.connect(_on_world_snapshot)
+	_client_net.ability_cast_completed.connect(_on_ability_cast_completed)
 
 	var error: Error = _client_net.connect_to_server("127.0.0.1")
 	if error != OK:
@@ -72,9 +83,21 @@ func _physics_process(delta: float) -> void:
 		if send_error != OK:
 			push_warning("Could not send movement intent: %s" % send_error)
 
+	var attack_key_pressed: bool = Input.is_key_pressed(KEY_SPACE)
+	if attack_key_pressed and not _attack_key_down:
+		_request_attack()
+	_attack_key_down = attack_key_pressed
+
 
 func _process(_delta: float) -> void:
 	_render_snapshot_buffer()
+	if _combat_message_time_remaining > 0.0:
+		_combat_message_time_remaining = maxf(
+			0.0,
+			_combat_message_time_remaining - _delta,
+		)
+		if _combat_message_time_remaining == 0.0:
+			_update_mob_health_label()
 	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view != null:
 		camera.global_position = local_view.global_position + Vector3(
@@ -107,10 +130,34 @@ func _on_disconnected() -> void:
 	status_label.text = tr("connection_disconnected")
 
 
+func _on_ability_cast_completed(
+	accepted: bool,
+	reason: String,
+	mob_id: String,
+	health: float,
+	max_health: float,
+) -> void:
+	var mob_definition: Dictionary = _game_data_registry["mobs"].get(mob_id, {})
+	var mob_name: String = tr(mob_definition.get("name_key", "combat_unknown_target"))
+	if accepted:
+		status_label.text = tr("combat_cast_success") % [
+			mob_name,
+			int(health),
+			int(max_health),
+		]
+	else:
+		status_label.text = tr("combat_cast_failed") % tr("combat_reason_" + reason)
+	_combat_message_time_remaining = 2.0
+
+
 func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var player_entries: Variant = snapshot.get("players", null)
 	if not player_entries is Array:
 		push_warning("Rejected world snapshot without player list")
+		return
+	var mob_entries: Variant = snapshot.get("mobs", null)
+	if not mob_entries is Array:
+		push_warning("Rejected world snapshot without mob list")
 		return
 
 	var positions: Dictionary = {}
@@ -131,10 +178,51 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 			local_player_view.set_simulated_position(position)
 			_has_authoritative_position = true
 
+	var new_mob_states: Dictionary = {}
+	for entry: Variant in mob_entries:
+		if not entry is Array or entry.size() != 4:
+			push_warning("Rejected malformed mob entry in world snapshot")
+			return
+		var mob_id: Variant = entry[0]
+		var position: Variant = entry[1]
+		var health: Variant = entry[2]
+		var max_health: Variant = entry[3]
+		if (
+			mob_id is not String
+			or position is not Vector3
+			or not _is_finite_number(health)
+			or not _is_finite_number(max_health)
+			or float(max_health) <= 0.0
+			or float(health) < 0.0
+			or float(health) > float(max_health)
+		):
+			push_warning("Rejected malformed mob state in world snapshot")
+			return
+		if not _game_data_registry["mobs"].has(mob_id):
+			push_warning("Rejected snapshot for unknown mob %s" % mob_id)
+			return
+		new_mob_states[mob_id] = {
+			"position": position,
+			"health": float(health),
+			"max_health": float(max_health),
+		}
+		_ensure_mob_view(mob_id)
+
 	var snapshot_record: Dictionary = {
 		"received_at_ms": Time.get_ticks_msec(),
 		"positions": positions,
 	}
+	_mob_states = new_mob_states
+	var existing_mob_ids: Array = _mob_views.keys()
+	for mob_id: String in existing_mob_ids:
+		if not _mob_states.has(mob_id):
+			var mob_view: Node3D = _mob_views[mob_id]
+			mob_view.queue_free()
+			_mob_views.erase(mob_id)
+		else:
+			var mob_view: Node3D = _mob_views[mob_id]
+			mob_view.position = _mob_states[mob_id]["position"]
+	_update_mob_health_label()
 	_snapshot_buffer.append(snapshot_record)
 	var capacity: int = int(_simulation_config["snapshot_buffer_capacity"])
 	while _snapshot_buffer.size() > capacity:
@@ -228,6 +316,59 @@ func _ensure_player_view(player_id: int) -> void:
 	_set_player_color(player_id, color)
 
 
+func _ensure_mob_view(mob_id: String) -> void:
+	if _mob_views.has(mob_id):
+		return
+	var mob_definition: Dictionary = _game_data_registry["mobs"][mob_id]
+	var mob_view: Node3D = Node3D.new()
+	mob_view.name = "Mob_%s" % mob_id
+	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+	var capsule: CapsuleMesh = CapsuleMesh.new()
+	capsule.radius = float(mob_definition["visual_radius"])
+	capsule.height = float(mob_definition["visual_height"])
+	mesh_instance.mesh = capsule
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(0.35, 0.78, 0.38)
+	mesh_instance.material_override = material
+	mesh_instance.position.y = capsule.height / 2.0
+	mob_view.add_child(mesh_instance)
+	add_child(mob_view)
+	_mob_views[mob_id] = mob_view
+
+
+func _update_mob_health_label() -> void:
+	if _mob_states.is_empty() or _combat_message_time_remaining > 0.0:
+		return
+	var mob_id: String = _mob_states.keys()[0]
+	var mob_definition: Dictionary = _game_data_registry["mobs"][mob_id]
+	status_label.text = tr("combat_mob_health") % [
+		tr(mob_definition["name_key"]),
+		int(_mob_states[mob_id]["health"]),
+		int(_mob_states[mob_id]["max_health"]),
+	]
+
+
+func _request_attack() -> void:
+	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
+	if local_view == null or _mob_states.is_empty():
+		return
+	var target_mob_id: String = ""
+	var nearest_distance_squared: float = INF
+	for mob_id: String in _mob_states:
+		if float(_mob_states[mob_id]["health"]) <= 0.0:
+			continue
+		var mob_position: Vector3 = _mob_states[mob_id]["position"]
+		var distance_squared: float = local_view.global_position.distance_squared_to(mob_position)
+		if distance_squared < nearest_distance_squared:
+			nearest_distance_squared = distance_squared
+			target_mob_id = mob_id
+	if target_mob_id.is_empty():
+		return
+	var error: Error = _client_net.request_ability_cast("starter_slash", target_mob_id)
+	if error != OK:
+		push_warning("Could not send ability cast: %s" % error)
+
+
 func _set_player_color(player_id: int, color: Color) -> void:
 	var player_view: PlayerBodyAdapter = _player_views.get(player_id)
 	if player_view == null:
@@ -235,3 +376,11 @@ func _set_player_color(player_id: int, color: Color) -> void:
 	var mesh_instance: MeshInstance3D = player_view.get_node("Visual")
 	var material: StandardMaterial3D = mesh_instance.material_override
 	material.albedo_color = color
+
+
+func _is_finite_number(value: Variant) -> bool:
+	var value_type: int = typeof(value)
+	return (
+		(value_type == TYPE_INT or value_type == TYPE_FLOAT)
+		and is_finite(float(value))
+	)

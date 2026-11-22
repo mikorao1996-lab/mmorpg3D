@@ -42,7 +42,11 @@ File: `resources/data/mobs.json`
 - `id`, `name_key`: non-empty strings.
 - `level`: integer >= 1; `health` and `respawn_seconds` are > 0.
 - `attack`, `defense`, `move_speed`, `aggro_range`: finite numbers >= 0.
+- `spawn_position`: three finite numeric coordinates; `visual_radius` and
+  `visual_height` are finite numbers > 0.
 - `loot_item_ids`: unique item IDs; each must exist in the item registry.
+  The current combat slice uses these spawn and visual fields to initialize
+  zone-local mob state and render the placeholder client model.
 
 ## Quests
 
