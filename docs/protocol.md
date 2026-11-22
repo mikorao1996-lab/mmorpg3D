@@ -7,6 +7,12 @@
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
 - Default server port: `7788`.
+- Maximum requests: `20` per peer in a one-second rate window.
+- Unauthenticated handshake timeout: `10` seconds.
+
+The channel IDs above are protocol channel IDs. Godot's `ENetMultiplayerPeer`
+reserves two underlying ENet channels, so direct `ENetPacketPeer.send()` calls
+map a protocol channel to the transport channel by adding one.
 
 ## Packet envelope
 

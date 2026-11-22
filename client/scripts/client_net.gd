@@ -73,4 +73,8 @@ func send_packet(opcode: int, payload: Dictionary = {}) -> Error:
 	var server_peer: ENetPacketPeer = peer.get_peer(1)
 	if server_peer == null:
 		return ERR_UNAVAILABLE
-	return server_peer.send(ProtocolConstantsType.EVENT_CHANNEL, packet, 2)
+	return server_peer.send(
+		ProtocolConstantsType.to_transport_channel(ProtocolConstantsType.EVENT_CHANNEL),
+		packet,
+		ProtocolConstantsType.PACKET_FLAG_RELIABLE,
+	)

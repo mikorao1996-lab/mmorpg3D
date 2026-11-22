@@ -94,7 +94,7 @@
 - [x] Добавлены конкретные версия Godot и параллели с ОС разработки/сервером.
 - [x] Убраны шаблонные поля или заполнены фактическими данными.
 - [x] В структуре репозитория нет лишнего `repo/`.
-- [ ] Зафиксированы каналы ENet, envelope пакета и список opcode.
+- [x] Зафиксированы каналы ENet, envelope пакета и список opcode.
 - [ ] Зафиксированы JSON-схемы и минимальные сетевые лимиты.
 - [ ] Решено локальное окружение для PostgreSQL и Docker.
 - [x] Подтверждено, что первый шаг — создание запускаемого пустого проекта, а не игровая логика.
@@ -106,6 +106,9 @@
 - Runtime-проверка выполнена для Godot 4.7.2: unit-tests и загрузка основной сцены прошли успешно.
 - Headless-серверный bootstrap запускается и использует проверку `DisplayServer.get_name()` для режима без дисплея.
 - Docker пока не найден в `PATH`; проверка контейнерного запуска перенесена на следующую инфраструктурную задачу.
-- Phase 2 (частично): реализованы shared packet codec, server listener/session, ENet channels и handshake opcodes.
-- Unit-тесты packet codec проходят: `UNIT_TESTS_OK`.
-- Runtime handshake ещё не отмечен выполненным: не получено подтверждение `NETWORK_LOOPBACK_OK`; требуется стабилизировать event loop и peer polling.
+- Phase 2: завершена. Реализованы shared packet codec, server listener/session, ENet channels и handshake opcodes.
+- Godot ENet резервирует два transport-канала для внутреннего трафика; protocol channel IDs отображаются на transport channels с offset.
+- Event packets отправляются с `FLAG_RELIABLE`; snapshots используют unreliable flags.
+- Успешный loopback с двумя клиентами подтвердил валидный handshake и отказ при несовместимой версии (`NETWORK_LOOPBACK_OK`).
+- Unit-тесты и интеграционный runner проходят на Godot 4.7.2.
+- Отдельная headless server scene успешно привязала UDP/7788.

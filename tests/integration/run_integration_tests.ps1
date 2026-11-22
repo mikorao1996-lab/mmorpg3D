@@ -1,26 +1,23 @@
-$serverExecutable = "D:\Dev\Godot_v4.7.2-stable_win64.exe"
-$projectPath = "D:\Dev\mmorpg3D"
+$ErrorActionPreference = "Stop"
+$projectPath = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$godotExecutable = $env:GODOT_BIN
 
-$server = Start-Process -FilePath $serverExecutable -ArgumentList @(
+if ([string]::IsNullOrWhiteSpace($godotExecutable)) {
+	$godotCommand = Get-Command godot -ErrorAction SilentlyContinue
+	if ($null -eq $godotCommand) {
+		throw "Set GODOT_BIN or add godot to PATH."
+	}
+	$godotExecutable = $godotCommand.Source
+}
+
+$godotProcess = Start-Process -FilePath $godotExecutable -ArgumentList @(
 	"--headless",
 	"--path",
-	$projectPath,
+	"`"$projectPath`"",
 	"--scene",
-	"res://server/main/server_main.tscn"
-) -PassThru
+	"res://tests/integration/network_loopback.tscn"
+) -NoNewWindow -Wait -PassThru
 
-try {
-	Start-Sleep -Seconds 1
-	& $serverExecutable --headless --path $projectPath --scene "res://tests/integration/handshake_client.tscn"
-	if ($LASTEXITCODE -ne 0) {
-		throw "Valid handshake test failed"
-	}
-
-	& $serverExecutable --headless --path $projectPath --scene "res://tests/integration/handshake_client.tscn" --mismatched
-	if ($LASTEXITCODE -ne 0) {
-		throw "Protocol mismatch test failed"
-	}
-}
-finally {
-	Stop-Process -Id $server.Id
+if ($godotProcess.ExitCode -ne 0) {
+	throw "Network loopback integration test failed."
 }

@@ -32,17 +32,20 @@ func _process(delta: float) -> void:
 	valid_client.poll()
 	mismatch_client.poll()
 
-	if elapsed_seconds >= 0.5 and not valid_sent:
+	if (
+		elapsed_seconds >= 0.25
+		and not valid_sent
+		and valid_client.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	):
 		send_hello(valid_client, ProtocolConstantsType.PROTOCOL_VERSION)
 		valid_sent = true
-	if elapsed_seconds >= 1.0 and not mismatch_sent:
+	if (
+		elapsed_seconds >= 0.25
+		and not mismatch_sent
+		and mismatch_client.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	):
 		send_hello(mismatch_client, ProtocolConstantsType.PROTOCOL_VERSION + 1)
 		mismatch_sent = true
-	if int(elapsed_seconds * 2.0) % 2 == 0 and int(elapsed_seconds) >= 1:
-		if not valid_accepted:
-			send_hello(valid_client, ProtocolConstantsType.PROTOCOL_VERSION)
-		if not mismatch_rejected:
-			send_hello(mismatch_client, ProtocolConstantsType.PROTOCOL_VERSION + 1)
 
 	poll_client(valid_client, false)
 	poll_client(mismatch_client, true)
@@ -71,7 +74,11 @@ func send_hello(client_peer: ENetMultiplayerPeer, protocol: int) -> void:
 		ProtocolConstantsType.OPCODE_HELLO,
 		{"protocol": protocol},
 	)
-	server_peer.send(ProtocolConstantsType.EVENT_CHANNEL, packet, 2)
+	server_peer.send(
+		ProtocolConstantsType.to_transport_channel(ProtocolConstantsType.EVENT_CHANNEL),
+		packet,
+		ProtocolConstantsType.PACKET_FLAG_RELIABLE,
+	)
 
 
 func poll_client(client_peer: ENetMultiplayerPeer, mismatch: bool) -> void:

@@ -13,4 +13,10 @@ func run() -> bool:
 	if ProtocolConstantsType.SNAPSHOT_CHANNEL == ProtocolConstantsType.EVENT_CHANNEL:
 		push_error("Snapshot and event channels must differ")
 		return false
+	if ProtocolConstantsType.to_transport_channel(ProtocolConstantsType.SNAPSHOT_CHANNEL) != 1:
+		push_error("Snapshot channel does not map to the expected ENet channel")
+		return false
+	if ProtocolConstantsType.to_transport_channel(ProtocolConstantsType.EVENT_CHANNEL) != 2:
+		push_error("Event channel does not map past ENet's reserved channels")
+		return false
 	return true
