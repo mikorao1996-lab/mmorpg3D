@@ -21,7 +21,8 @@ var _snapshot_buffer: Array[Dictionary] = []
 var _player_views: Dictionary = {}
 var _mob_states: Dictionary = {}
 var _mob_views: Dictionary = {}
-var _attack_key_down: bool = false
+var _slash_key_down: bool = false
+var _heavy_strike_key_down: bool = false
 var _combat_message_time_remaining: float = 0.0
 
 
@@ -83,10 +84,14 @@ func _physics_process(delta: float) -> void:
 		if send_error != OK:
 			push_warning("Could not send movement intent: %s" % send_error)
 
-	var attack_key_pressed: bool = Input.is_key_pressed(KEY_SPACE)
-	if attack_key_pressed and not _attack_key_down:
-		_request_attack()
-	_attack_key_down = attack_key_pressed
+	var slash_key_pressed: bool = Input.is_key_pressed(KEY_SPACE)
+	if slash_key_pressed and not _slash_key_down:
+		_request_attack("starter_slash")
+	_slash_key_down = slash_key_pressed
+	var heavy_strike_key_pressed: bool = Input.is_key_pressed(KEY_E)
+	if heavy_strike_key_pressed and not _heavy_strike_key_down:
+		_request_attack("heavy_strike")
+	_heavy_strike_key_down = heavy_strike_key_pressed
 
 
 func _process(_delta: float) -> void:
@@ -348,7 +353,7 @@ func _update_mob_health_label() -> void:
 	]
 
 
-func _request_attack() -> void:
+func _request_attack(ability_id: String) -> void:
 	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view == null or _mob_states.is_empty():
 		return
@@ -364,7 +369,7 @@ func _request_attack() -> void:
 			target_mob_id = mob_id
 	if target_mob_id.is_empty():
 		return
-	var error: Error = _client_net.request_ability_cast("starter_slash", target_mob_id)
+	var error: Error = _client_net.request_ability_cast(ability_id, target_mob_id)
 	if error != OK:
 		push_warning("Could not send ability cast: %s" % error)
 

@@ -30,6 +30,8 @@ var primary_cast_sent: bool = false
 var primary_cast_accepted: bool = false
 var cooldown_cast_sent: bool = false
 var cooldown_rejected: bool = false
+var heavy_strike_cast_sent: bool = false
+var heavy_strike_cast_accepted: bool = false
 var out_of_range_cast_sent: bool = false
 var out_of_range_rejected: bool = false
 var valid_player_id: int = 0
@@ -69,6 +71,7 @@ func _ready() -> void:
 	valid_client.world_snapshot.connect(_on_valid_world_snapshot)
 	valid_client.ability_cast_completed.connect(_on_primary_ability_cast_completed)
 	valid_client.ability_cast_completed.connect(_on_cooldown_cast_completed)
+	valid_client.ability_cast_completed.connect(_on_heavy_strike_cast_completed)
 	var valid_error: Error = valid_client.connect_to_server("127.0.0.1", 7790)
 	if valid_error != OK:
 		push_error("Failed to connect primary integration client: %s" % valid_error)
@@ -136,6 +139,17 @@ func _process(delta: float) -> void:
 			return
 		cooldown_cast_sent = true
 
+	if primary_cast_accepted and not heavy_strike_cast_sent:
+		var heavy_strike_error: Error = valid_client.request_ability_cast(
+			"heavy_strike",
+			"training_slime",
+		)
+		if heavy_strike_error != OK:
+			push_error("Failed to send loopback heavy strike: %s" % heavy_strike_error)
+			get_tree().quit(1)
+			return
+		heavy_strike_cast_sent = true
+
 	if second_valid_accepted and not out_of_range_cast_sent:
 		var range_error: Error = second_valid_client.request_ability_cast(
 			"starter_slash",
@@ -185,6 +199,7 @@ func _process(delta: float) -> void:
 		and invalid_zone_rejected
 		and primary_cast_accepted
 		and cooldown_rejected
+		and heavy_strike_cast_accepted
 		and out_of_range_rejected
 		and primary_isolated_in_starter
 		and second_isolated_in_dungeon
@@ -192,7 +207,7 @@ func _process(delta: float) -> void:
 		print("COMBAT_LOOPBACK_OK")
 		get_tree().quit(0)
 	elif elapsed_seconds > 5.0:
-		print("ZONE_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s zone_sent=%s zone_applied=%s zone_accepted=%s invalid_zone=%s combat=%s cooldown=%s out_of_range=%s isolated=%s/%s player_id=%d second_player_id=%d" % [
+		print("ZONE_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s zone_sent=%s zone_applied=%s zone_accepted=%s invalid_zone=%s combat=%s cooldown=%s heavy=%s out_of_range=%s isolated=%s/%s player_id=%d second_player_id=%d" % [
 			valid_accepted,
 			second_valid_accepted,
 			mismatch_rejected,
@@ -205,6 +220,7 @@ func _process(delta: float) -> void:
 			invalid_zone_rejected,
 			primary_cast_accepted,
 			cooldown_rejected,
+			heavy_strike_cast_accepted,
 			out_of_range_rejected,
 			primary_isolated_in_starter,
 			second_isolated_in_dungeon,
@@ -341,11 +357,12 @@ func _on_primary_ability_cast_completed(
 	max_health: float,
 ) -> void:
 	if accepted:
-		primary_cast_accepted = (
+		if (
 			mob_id == "training_slime"
 			and is_equal_approx(health, 22.0)
 			and is_equal_approx(max_health, 30.0)
-		)
+		):
+			primary_cast_accepted = true
 	elif reason != "cooldown":
 		push_error("Primary loopback ability cast was rejected: %s" % reason)
 
@@ -367,7 +384,25 @@ func _on_cooldown_cast_completed(
 	_health: float,
 	_max_health: float,
 ) -> void:
-	cooldown_rejected = not accepted and reason == "cooldown"
+	if not accepted and reason == "cooldown":
+		cooldown_rejected = true
+
+
+func _on_heavy_strike_cast_completed(
+	accepted: bool,
+	reason: String,
+	mob_id: String,
+	health: float,
+	max_health: float,
+) -> void:
+	if accepted:
+		heavy_strike_cast_accepted = (
+			mob_id == "training_slime"
+			and is_equal_approx(health, 7.0)
+			and is_equal_approx(max_health, 30.0)
+		)
+	elif reason != "cooldown":
+		push_error("Loopback heavy strike was rejected: %s" % reason)
 
 
 func _on_zone_transfer_completed(zone_id: String, accepted: bool, reason: String) -> void:

@@ -54,6 +54,25 @@ func run() -> bool:
 	if cooldown_rejection["accepted"] or cooldown_rejection["reason"] != "cooldown":
 		push_error("Server world did not enforce the ability cooldown")
 		return false
+	var independent_ability_cast: Dictionary = server_world.cast_ability(
+		1,
+		"heavy_strike",
+		"training_slime",
+	)
+	if (
+		not independent_ability_cast["accepted"]
+		or not is_equal_approx(independent_ability_cast["health"], 7.0)
+	):
+		push_error("Server world did not allow a separate ability during slash cooldown")
+		return false
+	var heavy_strike_cooldown: Dictionary = server_world.cast_ability(
+		1,
+		"heavy_strike",
+		"training_slime",
+	)
+	if heavy_strike_cooldown["accepted"] or heavy_strike_cooldown["reason"] != "cooldown":
+		push_error("Server world did not enforce the heavy strike cooldown")
+		return false
 	var range_rejection: Dictionary = server_world.cast_ability(
 		2,
 		"starter_slash",

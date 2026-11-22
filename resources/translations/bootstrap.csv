@@ -1,6 +1,6 @@
 keys,en,ru
 bootstrap_ready,"mmorpg3D client bootstrap is ready","mmorpg3D: клиент успешно запущен"
-controls_hint,"WASD: move | SPACE: attack nearest mob","WASD: движение | ПРОБЕЛ: атаковать ближайшего моба"
+controls_hint,"WASD: move | SPACE: Quick Slash | E: Heavy Strike","WASD: движение | ПРОБЕЛ: Быстрый удар | E: Тяжёлый удар"
 connection_connecting,"Connecting to 127.0.0.1:7788...","Подключение к 127.0.0.1:7788..."
 connection_connected,"Connected as player %d","Подключено: игрок %d"
 connection_disconnected,"Disconnected from server","Соединение с сервером потеряно"
@@ -9,6 +9,8 @@ connection_failed,"Could not start network client","Не удалось запу
 simulation_config_error,"Simulation configuration is invalid","Ошибка конфигурации симуляции"
 game_data_error,"Game data is invalid","Ошибка игровых данных"
 mob_training_slime,"Training Slime","Тренировочная слизь"
+ability_starter_slash,"Quick Slash","Быстрый удар"
+ability_heavy_strike,"Heavy Strike","Тяжёлый удар"
 combat_mob_health,"%s | HP: %d / %d","%s | ЗД: %d / %d"
 combat_cast_success,"%s hit | HP: %d / %d","Попадание по цели: %s | ЗД: %d / %d"
 combat_cast_failed,"Attack failed: %s","Атака не удалась: %s"

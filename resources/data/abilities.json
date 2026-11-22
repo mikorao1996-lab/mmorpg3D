@@ -11,6 +11,17 @@
       "range": 2.5,
       "effect_type": "damage",
       "magnitude": 8
+    },
+    {
+      "id": "heavy_strike",
+      "name_key": "ability_heavy_strike",
+      "class_id": "warrior",
+      "target_type": "enemy",
+      "cooldown_seconds": 3.0,
+      "resource_cost": 0,
+      "range": 2.5,
+      "effect_type": "damage",
+      "magnitude": 15
     }
   ]
 }
