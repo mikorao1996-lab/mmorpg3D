@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://doapqmkxmdkk"
+
+[deps]
+
+files=["res://resources/translations/bootstrap.en.translation", "res://resources/translations/bootstrap.ru.translation"]
+
+source_file="res://resources/translations/bootstrap.csv"
+dest_files=["res://resources/translations/bootstrap.en.translation", "res://resources/translations/bootstrap.ru.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true
