@@ -2,6 +2,7 @@ extends SceneTree
 
 const ProtocolTest: GDScript = preload("res://tests/unit/protocol_constants_test.gd")
 const CodecTest: GDScript = preload("res://tests/unit/packet_codec_test.gd")
+const MovementTest: GDScript = preload("res://tests/unit/movement_simulation_test.gd")
 
 
 func _initialize() -> void:
@@ -9,6 +10,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not CodecTest.new().run():
+		quit(1)
+		return
+	if not MovementTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

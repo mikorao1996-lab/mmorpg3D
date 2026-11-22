@@ -22,7 +22,25 @@ The main client scene is `client/scenes/main.tscn`.
 godot --headless --path D:\Dev\mmorpg3D --scene res://server/main/server_main.tscn
 ```
 
-The server currently provides the network bootstrap on port `7788` and no gameplay yet.
+The server listens on UDP port `7788` and authoritatively simulates player movement.
+
+## Multiplayer sandbox
+
+Start the headless server in one terminal:
+
+```powershell
+godot --headless --path D:\Dev\mmorpg3D --scene res://server/main/server_main.tscn
+```
+
+Then launch the project twice (for example, in two terminals):
+
+```powershell
+godot --path D:\Dev\mmorpg3D
+```
+
+Both clients connect to `127.0.0.1:7788`. Use **WASD** to move; each client
+shows both players, predicts its own movement, and interpolates server snapshots.
+Close the server with `Ctrl+C` when finished.
 
 ## Unit checks
 
@@ -37,5 +55,7 @@ $env:GODOT_BIN = "D:\Dev\Godot_v4.7.2-stable_win64.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/integration/run_integration_tests.ps1
 ```
 
-The loopback check starts one headless ENet server and two clients in-process.
-It checks successful protocol negotiation and rejection of an unsupported version.
+The loopback check starts one headless ENet server, two production `ClientNet`
+clients, and one incompatible raw client in-process. It checks both successful
+handshakes, rejection of the unsupported protocol version, presence of both
+players in world snapshots, and server-side movement.

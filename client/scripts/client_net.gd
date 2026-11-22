@@ -6,11 +6,14 @@ const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd
 
 signal connected()
 signal disconnected()
-signal hello_accepted(protocol: int)
+signal hello_accepted(protocol: int, player_id: int)
 signal hello_rejected(reason: String)
+signal world_snapshot(snapshot: Dictionary)
 
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
+var _transport_connected: bool = false
+var _hello_sent: bool = false
 
 
 func connect_to_server(address: String, port: int = ProtocolConstantsType.SERVER_PORT) -> Error:
@@ -19,7 +22,12 @@ func connect_to_server(address: String, port: int = ProtocolConstantsType.SERVER
 	if error != OK:
 		push_error("Failed to create ENet client")
 		return error
-	peer.get_peer(1).set_timeout(3000, 5000, 10000)
+	var server_peer: ENetPacketPeer = peer.get_peer(1)
+	if server_peer == null:
+		push_error("ENet client did not create its server peer")
+		peer.close()
+		return ERR_UNCONFIGURED
+	server_peer.set_timeout(3000, 5000, 10000)
 	return OK
 
 
@@ -27,6 +35,19 @@ func _process(_delta: float) -> void:
 	if peer == null:
 		return
 	peer.poll()
+	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+		_transport_connected = true
+		if not _hello_sent:
+			var send_error: Error = send_hello()
+			if send_error != OK:
+				push_error("Failed to send hello packet: %s" % send_error)
+			else:
+				_hello_sent = true
+	elif _transport_connected and peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
+		_transport_connected = false
+		is_connected = false
+		disconnected.emit()
+
 	while peer.get_available_packet_count() > 0:
 		var channel: int = peer.get_packet_channel()
 		var packet: PackedByteArray = peer.get_packet()
@@ -34,22 +55,38 @@ func _process(_delta: float) -> void:
 
 
 func handle_packet(channel: int, packet: PackedByteArray) -> void:
-	if channel != ProtocolConstantsType.EVENT_CHANNEL:
-		push_warning("Rejected snapshot packet before snapshot support")
+	if channel != ProtocolConstantsType.EVENT_CHANNEL \
+			and channel != ProtocolConstantsType.SNAPSHOT_CHANNEL:
+		push_warning("Rejected packet on unsupported channel")
 		return
 	var envelope: Dictionary = PacketCodecType.decode(packet)
 	if envelope.is_empty():
 		return
 
-	match envelope["opcode"] as int:
+	var opcode: int = envelope["opcode"]
+	var payload: Dictionary = envelope["payload"]
+	if channel == ProtocolConstantsType.SNAPSHOT_CHANNEL:
+		if not is_connected or opcode != ProtocolConstantsType.OPCODE_WORLD_SNAPSHOT:
+			push_warning("Rejected unexpected snapshot packet")
+			return
+		world_snapshot.emit(payload)
+		return
+
+	match opcode:
 		ProtocolConstantsType.OPCODE_HELLO_ACCEPTED:
-			var protocol: int = envelope["payload"].get("protocol", 0)
+			var protocol_value: Variant = payload.get("protocol", -1)
+			var player_id_value: Variant = payload.get("player_id", -1)
+			if protocol_value is not int or player_id_value is not int:
+				push_warning("Rejected malformed hello response")
+				return
+			if protocol_value != ProtocolConstantsType.PROTOCOL_VERSION:
+				hello_rejected.emit("protocol_mismatch")
+				return
 			is_connected = true
 			connected.emit()
-			hello_accepted.emit(protocol)
+			hello_accepted.emit(protocol_value, player_id_value)
 		ProtocolConstantsType.OPCODE_HELLO_REJECTED:
-			hello_rejected.emit(str(envelope["payload"].get("reason", "unknown")))
-			disconnected.emit()
+			hello_rejected.emit(str(payload.get("reason", "unknown")))
 		ProtocolConstantsType.OPCODE_KEEPALIVE_ACK:
 			pass
 
@@ -62,6 +99,14 @@ func send_hello() -> Error:
 
 func send_keepalive() -> Error:
 	return send_packet(ProtocolConstantsType.OPCODE_KEEPALIVE)
+
+
+func send_movement_intent(input_direction: Vector2) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	return send_packet(ProtocolConstantsType.OPCODE_MOVE_INPUT, {
+		"direction": input_direction,
+	})
 
 
 func send_packet(opcode: int, payload: Dictionary = {}) -> Error:

@@ -16,6 +16,8 @@ const OPCODE_HELLO_ACCEPTED: int = 2
 const OPCODE_HELLO_REJECTED: int = 3
 const OPCODE_KEEPALIVE: int = 4
 const OPCODE_KEEPALIVE_ACK: int = 5
+const OPCODE_MOVE_INPUT: int = 6
+const OPCODE_WORLD_SNAPSHOT: int = 7
 
 
 static func to_transport_channel(protocol_channel: int) -> int:

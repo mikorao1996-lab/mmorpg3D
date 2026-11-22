@@ -1,2 +1,9 @@
 keys,en,ru
 bootstrap_ready,"mmorpg3D client bootstrap is ready","mmorpg3D: клиент успешно запущен"
+controls_hint,"WASD: move | Start server, then launch two clients","WASD: движение | Запустите сервер, затем два клиента"
+connection_connecting,"Connecting to 127.0.0.1:7788...","Подключение к 127.0.0.1:7788..."
+connection_connected,"Connected as player %d | Move with WASD","Подключено: игрок %d | Движение: WASD"
+connection_disconnected,"Disconnected from server","Соединение с сервером потеряно"
+connection_rejected,"Connection rejected: %s","Подключение отклонено: %s"
+connection_failed,"Could not start network client","Не удалось запустить сетевой клиент"
+simulation_config_error,"Simulation configuration is invalid","Ошибка конфигурации симуляции"
