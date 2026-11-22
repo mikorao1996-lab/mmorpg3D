@@ -53,9 +53,9 @@ func move_player_to_zone(peer_id: int, target_zone_id: String) -> bool:
 
 	var current_zone: RefCounted = _zones[current_zone_id]
 	var target_zone: RefCounted = _zones[target_zone_id]
-	var player_position: Vector3 = current_zone.get_player_position(peer_id)
+	var player_state: Dictionary = current_zone.get_player_state(peer_id)
 	current_zone.remove_player(peer_id)
-	target_zone.add_player_at(peer_id, player_position)
+	target_zone.add_player_with_state(peer_id, player_state)
 	_peer_zones[peer_id] = target_zone_id
 	return true
 
@@ -82,6 +82,10 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 
 	var zone_id: String = _peer_zones[peer_id]
 	var zone: RefCounted = _zones[zone_id]
+	var player_state: Dictionary = zone.get_player_state(peer_id)
+	if float(player_state["health"]) <= 0.0:
+		result["reason"] = "player_dead"
+		return result
 	var target_state: Dictionary = zone.get_mob_state(target_mob_id)
 	if target_state.is_empty():
 		result["reason"] = "target_not_found"

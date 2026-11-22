@@ -19,6 +19,7 @@ var _has_authoritative_position: bool = false
 var _input_send_accumulator: float = 0.0
 var _snapshot_buffer: Array[Dictionary] = []
 var _player_views: Dictionary = {}
+var _player_health_states: Dictionary = {}
 var _mob_states: Dictionary = {}
 var _mob_views: Dictionary = {}
 var _slash_key_down: bool = false
@@ -56,10 +57,16 @@ func _physics_process(delta: float) -> void:
 	if _client_net == null or not _client_net.is_connected or _local_player_id == 0:
 		return
 
-	var input_direction: Vector2 = Vector2(
-		float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A)),
-		float(Input.is_key_pressed(KEY_S)) - float(Input.is_key_pressed(KEY_W)),
+	var local_health_state: Dictionary = _player_health_states.get(_local_player_id, {})
+	var player_is_defeated: bool = (
+		not local_health_state.is_empty() and float(local_health_state["health"]) <= 0.0
 	)
+	var input_direction: Vector2 = Vector2.ZERO
+	if not player_is_defeated:
+		input_direction = Vector2(
+			float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A)),
+			float(Input.is_key_pressed(KEY_S)) - float(Input.is_key_pressed(KEY_W)),
+		)
 	var max_input_magnitude: float = float(_simulation_config["max_input_magnitude"])
 	if input_direction.length() > max_input_magnitude:
 		input_direction = input_direction.normalized() * max_input_magnitude
@@ -85,11 +92,11 @@ func _physics_process(delta: float) -> void:
 			push_warning("Could not send movement intent: %s" % send_error)
 
 	var slash_key_pressed: bool = Input.is_key_pressed(KEY_SPACE)
-	if slash_key_pressed and not _slash_key_down:
+	if not player_is_defeated and slash_key_pressed and not _slash_key_down:
 		_request_attack("starter_slash")
 	_slash_key_down = slash_key_pressed
 	var heavy_strike_key_pressed: bool = Input.is_key_pressed(KEY_E)
-	if heavy_strike_key_pressed and not _heavy_strike_key_down:
+	if not player_is_defeated and heavy_strike_key_pressed and not _heavy_strike_key_down:
 		_request_attack("heavy_strike")
 	_heavy_strike_key_down = heavy_strike_key_pressed
 
@@ -102,7 +109,7 @@ func _process(_delta: float) -> void:
 			_combat_message_time_remaining - _delta,
 		)
 		if _combat_message_time_remaining == 0.0:
-			_update_mob_health_label()
+			_update_combat_status()
 	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view != null:
 		camera.global_position = local_view.global_position + Vector3(
@@ -166,16 +173,31 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		return
 
 	var positions: Dictionary = {}
+	var player_health_states: Dictionary = {}
 	for entry: Variant in player_entries:
-		if not entry is Array or entry.size() != 2:
+		if not entry is Array or entry.size() != 4:
 			push_warning("Rejected malformed player entry in world snapshot")
 			return
 		var player_id: Variant = entry[0]
 		var position: Variant = entry[1]
-		if player_id is not int or position is not Vector3:
+		var health: Variant = entry[2]
+		var max_health: Variant = entry[3]
+		if (
+			player_id is not int
+			or position is not Vector3
+			or not _is_finite_number(health)
+			or not _is_finite_number(max_health)
+			or float(max_health) <= 0.0
+			or float(health) < 0.0
+			or float(health) > float(max_health)
+		):
 			push_warning("Rejected malformed player state in world snapshot")
 			return
 		positions[player_id] = position
+		player_health_states[player_id] = {
+			"health": float(health),
+			"max_health": float(max_health),
+		}
 		_ensure_player_view(player_id)
 		if player_id == _local_player_id and not _has_authoritative_position:
 			_predicted_position = position
@@ -217,6 +239,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		"received_at_ms": Time.get_ticks_msec(),
 		"positions": positions,
 	}
+	_player_health_states = player_health_states
 	_mob_states = new_mob_states
 	var existing_mob_ids: Array = _mob_views.keys()
 	for mob_id: String in existing_mob_ids:
@@ -227,7 +250,8 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		else:
 			var mob_view: Node3D = _mob_views[mob_id]
 			mob_view.position = _mob_states[mob_id]["position"]
-	_update_mob_health_label()
+			mob_view.visible = float(_mob_states[mob_id]["health"]) > 0.0
+	_update_combat_status()
 	_snapshot_buffer.append(snapshot_record)
 	var capacity: int = int(_simulation_config["snapshot_buffer_capacity"])
 	while _snapshot_buffer.size() > capacity:
@@ -341,12 +365,19 @@ func _ensure_mob_view(mob_id: String) -> void:
 	_mob_views[mob_id] = mob_view
 
 
-func _update_mob_health_label() -> void:
-	if _mob_states.is_empty() or _combat_message_time_remaining > 0.0:
+func _update_combat_status() -> void:
+	if (
+		_combat_message_time_remaining > 0.0
+		or not _player_health_states.has(_local_player_id)
+		or _mob_states.is_empty()
+	):
 		return
 	var mob_id: String = _mob_states.keys()[0]
 	var mob_definition: Dictionary = _game_data_registry["mobs"][mob_id]
-	status_label.text = tr("combat_mob_health") % [
+	var player_state: Dictionary = _player_health_states[_local_player_id]
+	status_label.text = tr("combat_status") % [
+		int(player_state["health"]),
+		int(player_state["max_health"]),
 		tr(mob_definition["name_key"]),
 		int(_mob_states[mob_id]["health"]),
 		int(_mob_states[mob_id]["max_health"]),

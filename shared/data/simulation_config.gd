@@ -5,6 +5,8 @@ const CONFIG_PATH: String = "res://resources/data/simulation.json"
 const REQUIRED_NUMBER_KEYS: PackedStringArray = [
 	"simulation_step_seconds",
 	"movement_speed",
+	"player_max_health",
+	"player_respawn_seconds",
 	"max_input_magnitude",
 	"world_half_extent",
 	"interest_radius",

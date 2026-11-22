@@ -10,6 +10,8 @@
       "defense": 0,
       "move_speed": 1.5,
       "aggro_range": 6,
+      "attack_range": 1.25,
+      "attack_interval_seconds": 1.5,
       "respawn_seconds": 8,
       "spawn_position": [0, 0, -2],
       "visual_radius": 0.55,

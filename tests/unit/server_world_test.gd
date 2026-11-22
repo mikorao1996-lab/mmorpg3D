@@ -134,6 +134,6 @@ func run() -> bool:
 
 func _snapshot_has_player(player_states: Array, peer_id: int) -> bool:
 	for player_state: Variant in player_states:
-		if player_state is Array and player_state.size() == 2 and player_state[0] == peer_id:
+		if player_state is Array and player_state.size() >= 2 and player_state[0] == peer_id:
 			return true
 	return false

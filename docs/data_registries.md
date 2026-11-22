@@ -40,13 +40,14 @@ File: `resources/data/abilities.json`
 File: `resources/data/mobs.json`
 
 - `id`, `name_key`: non-empty strings.
-- `level`: integer >= 1; `health` and `respawn_seconds` are > 0.
-- `attack`, `defense`, `move_speed`, `aggro_range`: finite numbers >= 0.
+- `level`: integer >= 1; `health` > 0.
+- `attack`, `defense`, `move_speed`, `aggro_range`, `attack_range`: finite numbers >= 0.
+- `attack_interval_seconds` and `respawn_seconds`: finite numbers > 0.
 - `spawn_position`: three finite numeric coordinates; `visual_radius` and
   `visual_height` are finite numbers > 0.
 - `loot_item_ids`: unique item IDs; each must exist in the item registry.
-  The current combat slice uses these spawn and visual fields to initialize
-  zone-local mob state and render the placeholder client model.
+  The combat slice uses spawn/visual fields to initialize and render zone-local
+  mobs, and the aggro/attack fields to drive server-authoritative mob AI.
 
 ## Quests
 

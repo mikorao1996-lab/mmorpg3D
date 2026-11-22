@@ -306,9 +306,17 @@ func _process_world_snapshot(snapshot: Dictionary, track_local_player: bool) -> 
 		return
 
 	for state: Variant in player_states:
-		if not state is Array or state.size() != 2:
+		if not state is Array or state.size() != 4:
 			continue
 		if state[0] != valid_player_id or not state[1] is Vector3:
+			continue
+		if (
+			(typeof(state[2]) != TYPE_INT and typeof(state[2]) != TYPE_FLOAT)
+			or (typeof(state[3]) != TYPE_INT and typeof(state[3]) != TYPE_FLOAT)
+			or float(state[2]) < 0.0
+			or float(state[2]) > float(state[3])
+			or float(state[3]) <= 0.0
+		):
 			continue
 		var current_position: Vector3 = state[1]
 		if not local_position_seen:
@@ -414,6 +422,6 @@ func _on_zone_transfer_completed(zone_id: String, accepted: bool, reason: String
 
 func _snapshot_has_player(player_states: Array, player_id: int) -> bool:
 	for player_state: Variant in player_states:
-		if player_state is Array and player_state.size() == 2 and player_state[0] == player_id:
+		if player_state is Array and player_state.size() >= 2 and player_state[0] == player_id:
 			return true
 	return false

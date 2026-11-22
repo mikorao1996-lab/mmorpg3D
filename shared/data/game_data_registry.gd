@@ -124,6 +124,8 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 				or not _is_number_at_least(entry.get("defense"), 0.0)
 				or not _is_number_at_least(entry.get("move_speed"), 0.0)
 				or not _is_number_at_least(entry.get("aggro_range"), 0.0)
+				or not _is_number_at_least(entry.get("attack_range"), 0.0)
+				or not _is_number_greater_than(entry.get("attack_interval_seconds"), 0.0)
 				or not _is_number_greater_than(entry.get("respawn_seconds"), 0.0)
 				or not _is_vector3_array(entry.get("spawn_position"))
 				or not _is_number_greater_than(entry.get("visual_radius"), 0.0)

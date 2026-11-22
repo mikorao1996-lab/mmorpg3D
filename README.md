@@ -6,7 +6,7 @@ Godot 4 MMORPG vertical-slice project.
 
 - Godot 4.7 or newer
 - Windows for the editor/client
-- Linux/Docker for the server target
+- Linux for the server target; Docker is optional
 
 ## Client
 
@@ -51,7 +51,10 @@ Each zone contains the configured training slime. **SPACE** uses `starter_slash`
 and **E** uses `heavy_strike` on the nearest living mob. The server enforces
 target, range, damage, and separate cooldowns (1.2 and 3 seconds). Mob health is
 shown in the status panel, and a defeated mob respawns after its configured
-8 seconds.
+8 seconds. The slime pursues nearby players and attacks according to its mob
+data; players have 100 health and respawn at their zone spawn after 3 seconds
+if defeated. After a zone transfer, the entry position becomes that zone's
+respawn point.
 
 The simulation config defines in-memory zones `starter` and `dungeon`; clients
 start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`

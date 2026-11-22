@@ -17,6 +17,11 @@ func run() -> bool:
 			or not slime.get("loot_item_ids", []).has("minor_potion"):
 		push_error("Game data registry failed to resolve the mob loot reference")
 		return false
+	var invalid_mob: Dictionary = slime.duplicate(true)
+	invalid_mob["attack_interval_seconds"] = 0.0
+	if GameDataRegistryType.validate_entry("mobs", invalid_mob).is_empty():
+		push_error("Game data registry accepted a zero mob attack interval")
+		return false
 
 	var quest: Dictionary = registries["quests"].get("slime_problem", {})
 	if not registries["mobs"].has(quest.get("objective_target", "")):
