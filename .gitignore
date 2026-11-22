@@ -3,3 +3,5 @@
 *.tmp
 *.translation
 .env
+/native/postgres/bin/
+/native/postgres/.sconsign.dblite

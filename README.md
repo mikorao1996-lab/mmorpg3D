@@ -86,3 +86,38 @@ zones with isolated snapshots, and an explicit rejection for an unknown zone.
 It also verifies a server-authoritative hit, cooldown enforcement, and range
 rejection, plus independent execution of the heavy strike while slash is on
 cooldown.
+
+## PostgreSQL driver spike
+
+The native extension in `native/postgres` is a synchronous `libpq` smoke-test
+adapter. It is not yet wired into the game server or persistence layer.
+
+Initialize the `godot-cpp` submodule:
+
+```powershell
+git submodule update --init --recursive
+```
+
+Windows builds require Visual Studio C++ Build Tools, Python with SCons, and
+PostgreSQL development files. From an x64 Native Tools Command Prompt for
+Visual Studio:
+
+```cmd
+set POSTGRESQL_PATH=C:\Program Files\PostgreSQL\19
+python -m SCons -C native/postgres platform=windows target=template_debug arch=x86_64
+```
+
+Linux builds require a C++ toolchain, SCons, `pkg-config`, and `libpq-dev`:
+
+```sh
+python3 -m SCons -C native/postgres platform=linux target=template_debug arch=x86_64
+```
+
+The PostgreSQL spike test uses a local database at `127.0.0.1:55432`; run it
+against a temporary local cluster rather than changing the authentication of a
+shared PostgreSQL service:
+
+```powershell
+$env:PATH = "$env:POSTGRESQL_PATH\bin;$env:PATH"
+& 'D:\Dev\Godot_v4.7.2-stable_win64.exe' --headless --path . --script tests/integration/postgres_driver_spike.gd
+```

@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+import os
+
+from SCons.Script import Default, Environment, Glob, SConscript
+
+
+local_env = Environment(tools=["default"], PLATFORM="")
+env = SConscript(
+    "../godot-cpp/SConstruct",
+    {"api_version": "4.7", "env": local_env},
+)
+
+if env["platform"] == "windows":
+    postgresql_path = os.environ.get(
+        "POSTGRESQL_PATH", r"C:\Program Files\PostgreSQL\19"
+    )
+    include_path = os.path.join(postgresql_path, "include")
+    library_path = os.path.join(postgresql_path, "lib")
+    runtime_path = os.path.join(postgresql_path, "bin")
+    if not os.path.isfile(os.path.join(include_path, "libpq-fe.h")):
+        raise RuntimeError(
+            "PostgreSQL headers not found. Set POSTGRESQL_PATH to the PostgreSQL installation."
+        )
+    if not os.path.isfile(os.path.join(library_path, "libpq.lib")):
+        raise RuntimeError(
+            "libpq.lib not found. Set POSTGRESQL_PATH to the PostgreSQL installation."
+        )
+    env.Append(CPPPATH=[include_path], LIBPATH=[library_path], LIBS=["libpq"])
+elif env["platform"] == "linux":
+    env.ParseConfig("pkg-config --cflags --libs libpq")
+else:
+    raise RuntimeError("The PostgreSQL spike currently supports Windows and Linux.")
+
+env.Append(CPPPATH=["src"])
+
+suffix = env["suffix"].replace(".dev", "").replace(".universal", "")
+library_filename = "{}{}{}{}".format(
+    env.subst("$SHLIBPREFIX"),
+    "mmorpg3d_postgres",
+    suffix,
+    env.subst("$SHLIBSUFFIX"),
+)
+output_dir = os.path.join("bin", env["platform"])
+os.makedirs(output_dir, exist_ok=True)
+
+library = env.SharedLibrary(
+    os.path.join(output_dir, library_filename),
+    source=Glob("src/*.cpp"),
+)
+
+default_targets = [library]
+if env["platform"] == "windows":
+    runtime_dlls = [
+        "libpq.dll",
+        "libintl-8.dll",
+        "libiconv-2.dll",
+        "libssl-3-x64.dll",
+        "libcrypto-3-x64.dll",
+    ]
+    runtime_sources = [os.path.join(runtime_path, name) for name in runtime_dlls]
+    missing_dlls = [path for path in runtime_sources if not os.path.isfile(path)]
+    if missing_dlls:
+        raise RuntimeError(
+            "PostgreSQL runtime dependencies not found: {}".format(", ".join(missing_dlls))
+        )
+    default_targets.extend(env.Install(output_dir, runtime_sources))
+
+Default(*default_targets)
