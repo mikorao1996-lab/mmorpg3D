@@ -121,3 +121,11 @@ shared PostgreSQL service:
 $env:PATH = "$env:POSTGRESQL_PATH\bin;$env:PATH"
 & 'D:\Dev\Godot_v4.7.2-stable_win64.exe' --headless --path . --script tests/integration/postgres_driver_spike.gd
 ```
+
+To check that the extension loads and reports an unavailable database without
+starting PostgreSQL:
+
+```powershell
+$env:PATH = "D:\Dev\mmorpg3D\native\postgres\bin\windows;$env:PATH"
+& 'D:\Dev\Godot_v4.7.2-stable_win64.exe' --headless --path . --script tests/integration/postgres_driver_load_test.gd
+```

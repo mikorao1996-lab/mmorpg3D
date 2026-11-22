@@ -5,6 +5,7 @@ from SCons.Script import Default, Environment, Glob, SConscript
 
 
 local_env = Environment(tools=["default"], PLATFORM="")
+local_env["build_profile"] = "build_profile.json"
 env = SConscript(
     "../godot-cpp/SConstruct",
     {"api_version": "4.7", "env": local_env},
@@ -58,11 +59,20 @@ if env["platform"] == "windows":
         "libcrypto-3-x64.dll",
     ]
     runtime_sources = [os.path.join(runtime_path, name) for name in runtime_dlls]
-    missing_dlls = [path for path in runtime_sources if not os.path.isfile(path)]
+    runtime_targets = [os.path.join(output_dir, name) for name in runtime_dlls]
+    missing_dlls = [
+        source
+        for source, target in zip(runtime_sources, runtime_targets)
+        if not os.path.isfile(source) and not os.path.isfile(target)
+    ]
     if missing_dlls:
         raise RuntimeError(
             "PostgreSQL runtime dependencies not found: {}".format(", ".join(missing_dlls))
         )
-    default_targets.extend(env.Install(output_dir, runtime_sources))
+    default_targets.extend(
+        env.Install(output_dir, source)
+        for source in runtime_sources
+        if os.path.isfile(source)
+    )
 
 Default(*default_targets)

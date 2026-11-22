@@ -1,14 +1,24 @@
 extends SceneTree
 
+const POSTGRES_EXTENSION = preload("res://native/postgres/postgres.gdextension")
+
 const TEST_PORT: int = 55432
 
 
 func _initialize() -> void:
+	if POSTGRES_EXTENSION == null:
+		push_error("PostgreSQL GDExtension failed to load")
+		quit(1)
+		return
 	call_deferred("_run")
 
 
 func _run() -> void:
-	var connection := PostgresConnection.new()
+	var connection: RefCounted = ClassDB.instantiate("PostgresConnection") as RefCounted
+	if connection == null:
+		push_error("PostgresConnection class was not registered")
+		quit(1)
+		return
 	var connect_result: Dictionary = connection.connect_to_db(
 		"127.0.0.1",
 		TEST_PORT,

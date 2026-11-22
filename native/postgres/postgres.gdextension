@@ -5,8 +5,8 @@ compatibility_minimum = "4.7"
 
 [libraries]
 
-windows.debug.x86_64 = "res://native/postgres/bin/windows/libmmorpg3d_postgres.windows.template_debug.x86_64.dll"
-windows.release.x86_64 = "res://native/postgres/bin/windows/libmmorpg3d_postgres.windows.template_release.x86_64.dll"
+windows.debug.x86_64 = "res://native/postgres/bin/windows/mmorpg3d_postgres.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://native/postgres/bin/windows/mmorpg3d_postgres.windows.template_release.x86_64.dll"
 linux.debug.x86_64 = "res://native/postgres/bin/linux/libmmorpg3d_postgres.linux.template_debug.x86_64.so"
 linux.release.x86_64 = "res://native/postgres/bin/linux/libmmorpg3d_postgres.linux.template_release.x86_64.so"
 
