@@ -25,26 +25,33 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
-	for attempt: int in 500:
-		listener.poll()
-		valid_client.poll()
-		mismatch_client.poll()
 
-		if attempt == 50:
+func _process(delta: float) -> void:
+	elapsed_seconds += delta
+	listener.poll()
+	valid_client.poll()
+	mismatch_client.poll()
+
+	if elapsed_seconds >= 0.5 and not valid_sent:
+		send_hello(valid_client, ProtocolConstantsType.PROTOCOL_VERSION)
+		valid_sent = true
+	if elapsed_seconds >= 1.0 and not mismatch_sent:
+		send_hello(mismatch_client, ProtocolConstantsType.PROTOCOL_VERSION + 1)
+		mismatch_sent = true
+	if int(elapsed_seconds * 2.0) % 2 == 0 and int(elapsed_seconds) >= 1:
+		if not valid_accepted:
 			send_hello(valid_client, ProtocolConstantsType.PROTOCOL_VERSION)
-		if attempt == 100:
+		if not mismatch_rejected:
 			send_hello(mismatch_client, ProtocolConstantsType.PROTOCOL_VERSION + 1)
 
-		poll_client(valid_client, false)
-		poll_client(mismatch_client, true)
-		if valid_accepted and mismatch_rejected:
-			print("NETWORK_LOOPBACK_OK")
-			get_tree().quit(0)
-			return
-		OS.delay_msec(10)
-
-	push_error("NETWORK_LOOPBACK_TIMEOUT")
-	get_tree().quit(1)
+	poll_client(valid_client, false)
+	poll_client(mismatch_client, true)
+	if valid_accepted and mismatch_rejected:
+		print("NETWORK_LOOPBACK_OK")
+		get_tree().quit(0)
+	elif elapsed_seconds > 5.0:
+		push_error("NETWORK_LOOPBACK_TIMEOUT")
+		get_tree().quit(1)
 
 
 func create_client() -> ENetMultiplayerPeer:
