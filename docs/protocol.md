@@ -33,12 +33,20 @@ Opcodes:
 - `5`: `KEEPALIVE_ACK`
 - `6`: `MOVE_INPUT`
 - `7`: `WORLD_SNAPSHOT`
+- `8`: `ZONE_TRANSFER`
+- `9`: `ZONE_TRANSFER_RESULT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 
 `MOVE_INPUT` payloads contain a `direction` Vector2; the server validates its
 magnitude and applies it during the fixed simulation step. `WORLD_SNAPSHOT`
-payloads contain `server_time_ms` and a `players` array of `[peer_id, position]`
-entries. Each snapshot is filtered to the configured interest radius around its
-recipient and always includes that recipient. The current default radius is
-`10` world units in `resources/data/simulation.json`.
+payloads contain `zone_id`, `server_time_ms` and a `players` array of
+`[peer_id, position]` entries. Each snapshot is filtered to the configured
+interest radius around its recipient and always includes that recipient. The
+current default radius is `10` world units in `resources/data/simulation.json`.
+
+`ZONE_TRANSFER` requests contain a configured `zone_id`. Only authenticated
+peers can request a transfer. The server replies reliably with
+`ZONE_TRANSFER_RESULT`, containing the requested `zone_id`, an `accepted` boolean,
+and a `reason` string (`unknown_zone` when the zone is not configured). Player
+snapshots are routed only within the player's current zone.

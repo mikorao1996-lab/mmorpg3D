@@ -25,6 +25,7 @@ func _ready() -> void:
 	server_listener.player_authenticated.connect(server_world.add_player)
 	server_listener.player_disconnected.connect(server_world.remove_player)
 	server_listener.movement_intent.connect(_on_movement_intent)
+	server_listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
 
@@ -39,3 +40,11 @@ func _process(delta: float) -> void:
 func _on_movement_intent(peer_id: int, input_direction: Vector2) -> void:
 	if not server_world.set_input_direction(peer_id, input_direction):
 		push_warning("Rejected movement intent outside configured limits from peer %d" % peer_id)
+
+
+func _on_zone_transfer_requested(peer_id: int, zone_id: String) -> void:
+	var accepted: bool = server_world.move_player_to_zone(peer_id, zone_id)
+	var reason: String = "" if accepted else "unknown_zone"
+	server_listener.send_zone_transfer_result(peer_id, zone_id, accepted, reason)
+	if not accepted:
+		push_warning("Rejected transfer for peer %d to unknown zone %s" % [peer_id, zone_id])

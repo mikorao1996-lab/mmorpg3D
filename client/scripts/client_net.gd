@@ -9,6 +9,7 @@ signal disconnected()
 signal hello_accepted(protocol: int, player_id: int)
 signal hello_rejected(reason: String)
 signal world_snapshot(snapshot: Dictionary)
+signal zone_transfer_completed(zone_id: String, accepted: bool, reason: String)
 
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
@@ -87,6 +88,18 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 			hello_accepted.emit(protocol_value, player_id_value)
 		ProtocolConstantsType.OPCODE_HELLO_REJECTED:
 			hello_rejected.emit(str(payload.get("reason", "unknown")))
+		ProtocolConstantsType.OPCODE_ZONE_TRANSFER_RESULT:
+			var zone_id_value: Variant = payload.get("zone_id", null)
+			var accepted_value: Variant = payload.get("accepted", null)
+			var reason_value: Variant = payload.get("reason", "")
+			if (
+				zone_id_value is not String
+				or accepted_value is not bool
+				or reason_value is not String
+			):
+				push_warning("Rejected malformed zone transfer result")
+				return
+			zone_transfer_completed.emit(zone_id_value, accepted_value, reason_value)
 		ProtocolConstantsType.OPCODE_KEEPALIVE_ACK:
 			pass
 
@@ -106,6 +119,16 @@ func send_movement_intent(input_direction: Vector2) -> Error:
 		return ERR_UNCONFIGURED
 	return send_packet(ProtocolConstantsType.OPCODE_MOVE_INPUT, {
 		"direction": input_direction,
+	})
+
+
+func request_zone_transfer(zone_id: String) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if zone_id.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_ZONE_TRANSFER, {
+		"zone_id": zone_id,
 	})
 
 

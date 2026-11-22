@@ -30,6 +30,34 @@ func run() -> bool:
 		push_error("Interest snapshot included a player outside the configured radius")
 		return false
 
+	if not server_world.move_player_to_zone(2, "dungeon"):
+		push_error("Server world rejected a transfer to a configured zone")
+		return false
+	var routed_snapshots: Dictionary = server_world.create_snapshots()
+	if _snapshot_has_player(routed_snapshots[1]["players"], 2):
+		push_error("Player remained visible in the previous zone after transfer")
+		return false
+	if (
+		routed_snapshots[2]["zone_id"] != "dungeon"
+		or routed_snapshots[2]["players"].size() != 1
+		or not _snapshot_has_player(routed_snapshots[2]["players"], 2)
+	):
+		push_error("Transferred player did not receive an isolated zone snapshot")
+		return false
+	if server_world.move_player_to_zone(2, "unknown"):
+		push_error("Server world accepted transfer to an unconfigured zone")
+		return false
+	if server_world.move_player_to_zone(999, "dungeon"):
+		push_error("Server world accepted transfer for an unknown player")
+		return false
+	if not server_world.move_player_to_zone(2, "starter"):
+		push_error("Server world rejected a transfer back to the starter zone")
+		return false
+	var restored_snapshots: Dictionary = server_world.create_snapshots()
+	if not _snapshot_has_player(restored_snapshots[1]["players"], 2):
+		push_error("Transferred player did not reappear in the destination zone")
+		return false
+
 	server_world.remove_player(2)
 	var updated_snapshots: Dictionary = server_world.create_snapshots()
 	if updated_snapshots.has(2):

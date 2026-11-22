@@ -12,13 +12,21 @@ var mismatch_client: ENetMultiplayerPeer
 var elapsed_seconds: float = 0.0
 var mismatch_sent: bool = false
 var movement_sent: bool = false
+var zone_transfer_sent: bool = false
 var valid_accepted: bool = false
 var second_valid_accepted: bool = false
 var mismatch_rejected: bool = false
 var saw_two_players: bool = false
 var local_position_seen: bool = false
 var local_player_moved: bool = false
+var zone_transfer_applied: bool = false
+var zone_transfer_accepted: bool = false
+var invalid_zone_request_sent: bool = false
+var invalid_zone_rejected: bool = false
+var primary_isolated_in_starter: bool = false
+var second_isolated_in_dungeon: bool = false
 var valid_player_id: int = 0
+var second_player_id: int = 0
 var initial_local_position: Vector3 = Vector3.ZERO
 var _simulation_config: Dictionary = {}
 
@@ -37,6 +45,7 @@ func _ready() -> void:
 	listener.player_authenticated.connect(server_world.add_player)
 	listener.player_disconnected.connect(server_world.remove_player)
 	listener.movement_intent.connect(_on_movement_intent)
+	listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
 
 	valid_client = ClientNet.new()
 	add_child(valid_client)
@@ -52,6 +61,7 @@ func _ready() -> void:
 	add_child(second_valid_client)
 	second_valid_client.hello_accepted.connect(_on_second_hello_accepted)
 	second_valid_client.world_snapshot.connect(_on_second_world_snapshot)
+	second_valid_client.zone_transfer_completed.connect(_on_zone_transfer_completed)
 	var second_error: Error = second_valid_client.connect_to_server("127.0.0.1", 7790)
 	if second_error != OK:
 		push_error("Failed to connect second integration client: %s" % second_error)
@@ -85,6 +95,32 @@ func _process(delta: float) -> void:
 			return
 		movement_sent = true
 
+	if (
+		valid_accepted
+		and second_valid_accepted
+		and saw_two_players
+		and local_player_moved
+		and not zone_transfer_sent
+	):
+		var transfer_error: Error = second_valid_client.request_zone_transfer("dungeon")
+		if transfer_error != OK:
+			push_error("Failed to request loopback zone transfer: %s" % transfer_error)
+			get_tree().quit(1)
+			return
+		zone_transfer_sent = true
+
+	if (
+		zone_transfer_accepted
+		and second_isolated_in_dungeon
+		and not invalid_zone_request_sent
+	):
+		var invalid_transfer_error: Error = second_valid_client.request_zone_transfer("missing")
+		if invalid_transfer_error != OK:
+			push_error("Failed to request invalid loopback zone transfer")
+			get_tree().quit(1)
+			return
+		invalid_zone_request_sent = true
+
 	poll_mismatch_client()
 	if (
 		valid_accepted
@@ -92,20 +128,32 @@ func _process(delta: float) -> void:
 		and mismatch_rejected
 		and saw_two_players
 		and local_player_moved
+		and zone_transfer_applied
+		and zone_transfer_accepted
+		and invalid_zone_rejected
+		and primary_isolated_in_starter
+		and second_isolated_in_dungeon
 	):
-		print("WORLD_LOOPBACK_OK")
+		print("ZONE_LOOPBACK_OK")
 		get_tree().quit(0)
 	elif elapsed_seconds > 5.0:
-		print("WORLD_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s player_id=%d" % [
+		print("ZONE_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s zone_sent=%s zone_applied=%s zone_accepted=%s invalid_zone=%s isolated=%s/%s player_id=%d second_player_id=%d" % [
 			valid_accepted,
 			second_valid_accepted,
 			mismatch_rejected,
 			saw_two_players,
 			local_player_moved,
 			movement_sent,
+			zone_transfer_sent,
+			zone_transfer_applied,
+			zone_transfer_accepted,
+			invalid_zone_rejected,
+			primary_isolated_in_starter,
+			second_isolated_in_dungeon,
 			valid_player_id,
+			second_player_id,
 		])
-		push_error("WORLD_LOOPBACK_TIMEOUT")
+		push_error("ZONE_LOOPBACK_TIMEOUT")
 		get_tree().quit(1)
 
 
@@ -150,8 +198,9 @@ func _on_valid_hello_accepted(protocol: int, player_id: int) -> void:
 	valid_player_id = player_id
 
 
-func _on_second_hello_accepted(protocol: int, _player_id: int) -> void:
+func _on_second_hello_accepted(protocol: int, player_id: int) -> void:
 	second_valid_accepted = protocol == ProtocolConstantsType.PROTOCOL_VERSION
+	second_player_id = player_id
 
 
 func _on_valid_world_snapshot(snapshot: Dictionary) -> void:
@@ -167,6 +216,18 @@ func _process_world_snapshot(snapshot: Dictionary, track_local_player: bool) -> 
 	if not player_states is Array:
 		return
 	saw_two_players = saw_two_players or player_states.size() >= 2
+	if zone_transfer_applied and track_local_player:
+		primary_isolated_in_starter = (
+			snapshot.get("zone_id") == "starter"
+			and player_states.size() == 1
+			and _snapshot_has_player(player_states, valid_player_id)
+		)
+	elif zone_transfer_applied:
+		second_isolated_in_dungeon = (
+			snapshot.get("zone_id") == "dungeon"
+			and player_states.size() == 1
+			and _snapshot_has_player(player_states, second_player_id)
+		)
 	if not track_local_player:
 		return
 
@@ -192,3 +253,32 @@ func _process_world_snapshot(snapshot: Dictionary, track_local_player: bool) -> 
 func _on_movement_intent(peer_id: int, input_direction: Vector2) -> void:
 	if not server_world.set_input_direction(peer_id, input_direction):
 		push_error("Loopback world rejected valid movement intent")
+
+
+func _on_zone_transfer_requested(peer_id: int, zone_id: String) -> void:
+	var accepted: bool = server_world.move_player_to_zone(peer_id, zone_id)
+	var reason: String = "" if accepted else "unknown_zone"
+	listener.send_zone_transfer_result(peer_id, zone_id, accepted, reason)
+	if zone_id == "dungeon":
+		if not accepted:
+			push_error("Loopback world rejected transfer to configured zone")
+			get_tree().quit(1)
+			return
+		zone_transfer_applied = true
+	elif zone_id == "missing" and accepted:
+		push_error("Loopback world accepted transfer to an unconfigured zone")
+		get_tree().quit(1)
+
+
+func _on_zone_transfer_completed(zone_id: String, accepted: bool, reason: String) -> void:
+	if zone_id == "dungeon":
+		zone_transfer_accepted = accepted
+	elif zone_id == "missing":
+		invalid_zone_rejected = not accepted and reason == "unknown_zone"
+
+
+func _snapshot_has_player(player_states: Array, player_id: int) -> bool:
+	for player_state: Variant in player_states:
+		if player_state is Array and player_state.size() == 2 and player_state[0] == player_id:
+			return true
+	return false

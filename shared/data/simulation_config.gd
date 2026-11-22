@@ -41,6 +41,20 @@ static func load_config() -> Dictionary:
 		return {}
 
 	var config: Dictionary = parser.data
+	var zone_ids_value: Variant = config.get("zone_ids", null)
+	if not zone_ids_value is Array or zone_ids_value.is_empty():
+		push_error("Simulation config must define at least one zone ID")
+		return {}
+	var seen_zone_ids: Dictionary = {}
+	for zone_id: Variant in zone_ids_value:
+		if zone_id is not String or zone_id.strip_edges().is_empty():
+			push_error("Simulation config zone IDs must be non-empty strings")
+			return {}
+		if seen_zone_ids.has(zone_id):
+			push_error("Simulation config contains a duplicate zone ID: %s" % zone_id)
+			return {}
+		seen_zone_ids[zone_id] = true
+
 	for key: String in REQUIRED_NUMBER_KEYS:
 		if not config.has(key):
 			push_error("Simulation config is missing required key: %s" % key)

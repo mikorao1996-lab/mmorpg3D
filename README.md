@@ -47,6 +47,11 @@ adapter: the shared movement simulation still determines target positions, while
 remote players are interpolated from snapshots. Player collision layers are
 disabled until collision rules are authoritative on the server.
 
+The simulation config defines in-memory zones `starter` and `dungeon`; clients
+start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
+is available for server-validated transfers, but there is not yet a portal or
+zone-selection UI.
+
 ## Unit checks
 
 ```powershell
@@ -63,4 +68,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/integration/run_integr
 The loopback check starts one headless ENet server, two production `ClientNet`
 clients, and one incompatible raw client in-process. It checks both successful
 handshakes, rejection of the unsupported protocol version, presence of both
-players in world snapshots, and server-side movement.
+players in world snapshots, server-side movement, a successful transfer between
+zones with isolated snapshots, and an explicit rejection for an unknown zone.

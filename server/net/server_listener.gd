@@ -4,6 +4,7 @@ extends RefCounted
 signal player_authenticated(peer_id: int)
 signal player_disconnected(peer_id: int)
 signal movement_intent(peer_id: int, input_direction: Vector2)
+signal zone_transfer_requested(peer_id: int, zone_id: String)
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
@@ -78,6 +79,8 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 			push_warning("Keepalive before authentication from peer %d" % peer_id)
 	elif opcode == ProtocolConstantsType.OPCODE_MOVE_INPUT:
 		handle_movement_intent(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_ZONE_TRANSFER:
+		handle_zone_transfer(session, peer_id, payload)
 	else:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
@@ -112,6 +115,17 @@ func handle_movement_intent(session: RefCounted, peer_id: int, payload: Dictiona
 	movement_intent.emit(peer_id, input_value)
 
 
+func handle_zone_transfer(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("Zone transfer before authentication from peer %d" % peer_id)
+		return
+	var zone_id_value: Variant = payload.get("zone_id")
+	if zone_id_value is not String or zone_id_value.strip_edges().is_empty():
+		push_warning("Rejected malformed zone transfer from peer %d" % peer_id)
+		return
+	zone_transfer_requested.emit(peer_id, zone_id_value)
+
+
 func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
 	for peer_id: int in sessions:
 		var session: RefCounted = sessions[peer_id]
@@ -127,6 +141,31 @@ func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
 		)
 		if send_error != OK:
 			push_warning("Failed to send snapshot to peer %d: %s" % [peer_id, send_error])
+
+
+func send_zone_transfer_result(
+	peer_id: int,
+	zone_id: String,
+	accepted: bool,
+	reason: String = "",
+) -> void:
+	if not sessions.has(peer_id):
+		push_warning("Cannot send zone transfer result to missing peer %d" % peer_id)
+		return
+	var session: RefCounted = sessions[peer_id]
+	if not session.authenticated:
+		push_warning("Cannot send zone transfer result to unauthenticated peer %d" % peer_id)
+		return
+	var send_error: Error = session.send(
+		ProtocolConstantsType.OPCODE_ZONE_TRANSFER_RESULT,
+		{
+			"zone_id": zone_id,
+			"accepted": accepted,
+			"reason": reason,
+		},
+	)
+	if send_error != OK:
+		push_warning("Failed to send zone transfer result to peer %d: %s" % [peer_id, send_error])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

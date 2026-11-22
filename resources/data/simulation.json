@@ -1,4 +1,5 @@
 {
+  "zone_ids": ["starter", "dungeon"],
   "simulation_step_seconds": 0.05,
   "movement_speed": 4.0,
   "max_input_magnitude": 1.0,
