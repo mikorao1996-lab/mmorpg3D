@@ -30,7 +30,7 @@ func _run() -> void:
 		connection.close_connection()
 		quit(1)
 		return
-	if not _check(connection.is_connected(), "connection should be open"):
+	if not _check(connection.is_db_connected(), "connection should be open"):
 		connection.close_connection()
 		quit(1)
 		return
@@ -162,7 +162,7 @@ func _run() -> void:
 		return
 
 	connection.close_connection()
-	if not _check(not connection.is_connected(), "connection should be closed"):
+	if not _check(not connection.is_db_connected(), "connection should be closed"):
 		quit(1)
 		return
 	var closed_query: Dictionary = connection.execute_query("SELECT 1")

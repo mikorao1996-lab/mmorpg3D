@@ -34,5 +34,5 @@ public:
 	godot::Dictionary commit_transaction();
 	godot::Dictionary rollback_transaction();
 	void close_connection();
-	bool is_connected() const;
+	bool is_db_connected() const;
 };

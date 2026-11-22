@@ -82,7 +82,7 @@ void PostgresConnection::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("commit_transaction"), &PostgresConnection::commit_transaction);
 	ClassDB::bind_method(D_METHOD("rollback_transaction"), &PostgresConnection::rollback_transaction);
 	ClassDB::bind_method(D_METHOD("close_connection"), &PostgresConnection::close_connection);
-	ClassDB::bind_method(D_METHOD("is_connected"), &PostgresConnection::is_connected);
+	ClassDB::bind_method(D_METHOD("is_db_connected"), &PostgresConnection::is_db_connected);
 }
 
 PostgresConnection::~PostgresConnection() {
@@ -325,7 +325,7 @@ void PostgresConnection::close_connection() {
 	close_connection_locked();
 }
 
-bool PostgresConnection::is_connected() const {
+bool PostgresConnection::is_db_connected() const {
 	std::lock_guard<std::mutex> lock(mutex);
 	return connection != nullptr && PQstatus(connection) == CONNECTION_OK;
 }

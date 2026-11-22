@@ -31,7 +31,7 @@ func _initialize() -> void:
 		push_error("Connection failures must include an error message")
 		quit(1)
 		return
-	if connection.is_connected():
+	if connection.is_db_connected():
 		connection.close_connection()
 		push_error("Failed connection must not be reported as connected")
 		quit(1)
