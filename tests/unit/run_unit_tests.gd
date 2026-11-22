@@ -4,6 +4,7 @@ const ProtocolTest: GDScript = preload("res://tests/unit/protocol_constants_test
 const CodecTest: GDScript = preload("res://tests/unit/packet_codec_test.gd")
 const MovementTest: GDScript = preload("res://tests/unit/movement_simulation_test.gd")
 const ServerWorldTest: GDScript = preload("res://tests/unit/server_world_test.gd")
+const GameDataRegistryTest: GDScript = preload("res://tests/unit/game_data_registry_test.gd")
 
 
 func _initialize() -> void:
@@ -17,6 +18,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not ServerWorldTest.new().run():
+		quit(1)
+		return
+	if not GameDataRegistryTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

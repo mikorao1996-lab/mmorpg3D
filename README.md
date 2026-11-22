@@ -52,6 +52,10 @@ start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
 is available for server-validated transfers, but there is not yet a portal or
 zone-selection UI.
 
+The server loads the versioned item, ability, mob, and quest JSON registries
+before listening. Their initial schema and cross-reference rules are described
+in [docs/data_registries.md](./docs/data_registries.md).
+
 ## Unit checks
 
 ```powershell

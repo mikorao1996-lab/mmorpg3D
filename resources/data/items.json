@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "starter_sword",
+      "name_key": "item_starter_sword",
+      "item_type": "weapon",
+      "stack_limit": 1,
+      "level_requirement": 1,
+      "sell_price": 5,
+      "stats": {
+        "attack": 2
+      }
+    },
+    {
+      "id": "minor_potion",
+      "name_key": "item_minor_potion",
+      "item_type": "consumable",
+      "stack_limit": 20,
+      "level_requirement": 1,
+      "sell_price": 2,
+      "stats": {
+        "health": 25
+      }
+    }
+  ]
+}

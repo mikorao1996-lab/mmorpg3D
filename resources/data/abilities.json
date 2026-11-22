@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "starter_slash",
+      "name_key": "ability_starter_slash",
+      "class_id": "warrior",
+      "target_type": "enemy",
+      "cooldown_seconds": 1.2,
+      "resource_cost": 0,
+      "range": 2.5,
+      "effect_type": "damage",
+      "magnitude": 8
+    }
+  ]
+}

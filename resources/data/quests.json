@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "slime_problem",
+      "name_key": "quest_slime_problem",
+      "min_level": 1,
+      "objective_type": "kill",
+      "objective_target": "training_slime",
+      "objective_count": 3,
+      "reward_experience": 25,
+      "reward_item_ids": [
+        "minor_potion"
+      ]
+    }
+  ]
+}

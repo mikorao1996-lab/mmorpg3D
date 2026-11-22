@@ -123,3 +123,5 @@
 - Loopback Phase 3 проверяет переход второго production-клиента, изоляцию snapshots и явный отказ при запросе неизвестной зоны.
 - Phase 3: завершена для server-authoritative sandbox. Ограничения текущего среза: две примерные in-memory зоны в одном процессе, без portal/selection UI и сохранения состояния; эти части относятся к последующим фазам.
 - Следующая по плану — Phase 4: JSON-регистры игровых данных и их валидация, затем PostgreSQL и persistence.
+- Phase 4: зафиксированы начальные схемы и seed-данные items, abilities, mobs и quests; общий loader проверяет типы, обязательные поля, enum, диапазоны чисел и ссылки между записями.
+- Headless-сервер теперь валидирует и загружает реестры до открытия ENet listener. PostgreSQL, migrations и repositories ещё не реализованы.

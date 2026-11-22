@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "training_slime",
+      "name_key": "mob_training_slime",
+      "level": 1,
+      "health": 30,
+      "attack": 3,
+      "defense": 0,
+      "move_speed": 1.5,
+      "aggro_range": 6,
+      "respawn_seconds": 8,
+      "loot_item_ids": [
+        "minor_potion"
+      ]
+    }
+  ]
+}

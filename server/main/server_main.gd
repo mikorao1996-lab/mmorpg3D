@@ -2,9 +2,11 @@ extends Node
 
 const PROJECT_LOGGER: GDScript = preload("res://shared/logging/project_logger.gd")
 const SimulationConfigType: GDScript = preload("res://shared/data/simulation_config.gd")
+const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 
 var server_listener: RefCounted
 var server_world: RefCounted
+var game_data_registry: Dictionary = {}
 
 
 func _ready() -> void:
@@ -16,6 +18,11 @@ func _ready() -> void:
 
 	var simulation_config: Dictionary = SimulationConfigType.load_config()
 	if simulation_config.is_empty():
+		get_tree().quit(2)
+		return
+
+	game_data_registry = GameDataRegistryType.load_all()
+	if game_data_registry.is_empty():
 		get_tree().quit(2)
 		return
 
