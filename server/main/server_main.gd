@@ -33,7 +33,7 @@ func _process(delta: float) -> void:
 	if server_listener != null:
 		server_listener.poll()
 	if server_world != null and server_world.advance(delta):
-		server_listener.broadcast_world_snapshot(server_world.create_snapshot())
+		server_listener.broadcast_world_snapshots(server_world.create_snapshots())
 
 
 func _on_movement_intent(peer_id: int, input_direction: Vector2) -> void:

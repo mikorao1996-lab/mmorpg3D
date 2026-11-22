@@ -3,6 +3,7 @@
   "movement_speed": 4.0,
   "max_input_magnitude": 1.0,
   "world_half_extent": 11.0,
+  "interest_radius": 10.0,
   "spawn_spacing": 3.0,
   "snapshot_interval_seconds": 0.1,
   "input_send_interval_seconds": 0.1,

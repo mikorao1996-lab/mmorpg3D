@@ -115,4 +115,6 @@
 - Phase 3: готова первая проверяемая multiplayer-песочница: общий movement config/simulation, серверная фиксированная симуляция, intents, world snapshots, WASD-клиент, локальная prediction/reconciliation и interpolation удалённых игроков.
 - Loopback Phase 3 на Godot 4.7.2 подтверждён: два production `ClientNet` клиента проходят handshake, несовместимый клиент отклоняется, оба игрока попадают в snapshots и серверная позиция меняется после input (`WORLD_LOOPBACK_OK`).
 - Дополнительно прошли project import, unit tests (`UNIT_TESTS_OK`) и запуск headless-сервера на UDP/7788.
-- Phase 3 остаётся в работе: впереди entity registry/interest management и отдельный `CharacterBody3D` adapter; текущий milestone — минимальный sandbox, а не полный gameplay-срез.
+- Phase 3: добавлен серверный player registry и per-player interest management; каждый unreliable snapshot содержит только игроков в радиусе `interest_radius` (10 единиц по умолчанию) и всегда включает получателя. Disconnect удаляет игрока из registry и следующих snapshots.
+- Unit-тест проверяет AOI-границу, обязательную видимость самого игрока и удаление сущности; integration с двумя production-клиентами продолжает проходить (`WORLD_LOOPBACK_OK`).
+- Phase 3 остаётся в работе: отдельный `CharacterBody3D` adapter ещё не добавлен; текущий milestone — server-authoritative sandbox, а не полный gameplay-срез.

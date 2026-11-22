@@ -40,7 +40,9 @@ godot --path D:\Dev\mmorpg3D
 
 Both clients connect to `127.0.0.1:7788`. Use **WASD** to move; each client
 shows both players, predicts its own movement, and interpolates server snapshots.
-Close the server with `Ctrl+C` when finished.
+The server filters snapshots by the configured `interest_radius` (10 world units
+by default) and always includes the observing player. Close the server with
+`Ctrl+C` when finished.
 
 ## Unit checks
 

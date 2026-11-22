@@ -31,5 +31,14 @@ Opcodes:
 - `3`: `HELLO_REJECTED`
 - `4`: `KEEPALIVE`
 - `5`: `KEEPALIVE_ACK`
+- `6`: `MOVE_INPUT`
+- `7`: `WORLD_SNAPSHOT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
+
+`MOVE_INPUT` payloads contain a `direction` Vector2; the server validates its
+magnitude and applies it during the fixed simulation step. `WORLD_SNAPSHOT`
+payloads contain `server_time_ms` and a `players` array of `[peer_id, position]`
+entries. Each snapshot is filtered to the configured interest radius around its
+recipient and always includes that recipient. The current default radius is
+`10` world units in `resources/data/simulation.json`.

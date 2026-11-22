@@ -112,14 +112,17 @@ func handle_movement_intent(session: RefCounted, peer_id: int, payload: Dictiona
 	movement_intent.emit(peer_id, input_value)
 
 
-func broadcast_world_snapshot(snapshot: Dictionary) -> void:
+func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
 	for peer_id: int in sessions:
 		var session: RefCounted = sessions[peer_id]
 		if not session.authenticated:
 			continue
+		if not snapshots_by_peer.has(peer_id) or not snapshots_by_peer[peer_id] is Dictionary:
+			push_warning("No world snapshot generated for authenticated peer %d" % peer_id)
+			continue
 		var send_error: Error = session.send(
 			ProtocolConstantsType.OPCODE_WORLD_SNAPSHOT,
-			snapshot,
+			snapshots_by_peer[peer_id],
 			ProtocolConstantsType.SNAPSHOT_CHANNEL,
 		)
 		if send_error != OK:

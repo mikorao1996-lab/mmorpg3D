@@ -7,6 +7,7 @@ const REQUIRED_NUMBER_KEYS: PackedStringArray = [
 	"movement_speed",
 	"max_input_magnitude",
 	"world_half_extent",
+	"interest_radius",
 	"spawn_spacing",
 	"snapshot_interval_seconds",
 	"input_send_interval_seconds",

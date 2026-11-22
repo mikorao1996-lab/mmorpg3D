@@ -68,7 +68,7 @@ func _process(delta: float) -> void:
 	listener.poll()
 	mismatch_client.poll()
 	if server_world.advance(delta):
-		listener.broadcast_world_snapshot(server_world.create_snapshot())
+		listener.broadcast_world_snapshots(server_world.create_snapshots())
 
 	if (
 		not mismatch_sent
