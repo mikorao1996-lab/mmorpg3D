@@ -3,7 +3,7 @@
 ## Решение о готовности промпта
 
 Промпт достаточно готов по архитектуре и scope, но шаблонные параметры изначально требовали уточнения.
-Для стартового bootstrap приняты Godot 4.3, одна рабочая среда на Windows и Linux/Docker для headless-сервера.
+Для стартового bootstrap приняты Godot 4.7+, одна рабочая среда на Windows и Linux/Docker для headless-сервера.
 
 ## Что найдено
 
@@ -101,6 +101,6 @@
 
 ## Текущий статус реализации
 
-- Phase 0: завершена для стартового bootstrap. Зафиксированы Godot 4.3+, Windows для разработки и Linux/Docker для сервера.
+- Phase 0: завершена для стартового bootstrap. Зафиксированы Godot 4.7+, Windows для разработки и Linux/Docker для сервера.
 - Phase 1: добавлены `project.godot`, entry point клиента, headless bootstrap сервера, protocol constants, unit-check и базовые docs.
 - Runtime-проверка ожидает установки Godot на рабочей машине. Godot и Docker пока не найдены в `PATH`.

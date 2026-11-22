@@ -4,7 +4,7 @@ Godot 4 MMORPG vertical-slice project.
 
 ## Requirements
 
-- Godot 4.3 or newer
+- Godot 4.7 or newer
 - Windows for the editor/client
 - Linux/Docker for the server target
 
