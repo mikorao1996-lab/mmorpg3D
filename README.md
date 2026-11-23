@@ -48,8 +48,9 @@ remote players are interpolated from snapshots. Player collision layers are
 disabled until collision rules are authoritative on the server.
 
 Each zone contains the configured training slime. **SPACE** uses `starter_slash`
-and **E** uses `heavy_strike` on the nearest living mob. The server enforces
-target, range, damage, and separate cooldowns (1.2 and 3 seconds). Mob health is
+and **E** uses `heavy_strike` on the nearest living mob. **Q** uses
+`guard_break`, **R** uses `whirlwind`, and **T** uses `second_wind`. The server
+enforces target, range, damage/heal, resource cost, and separate cooldowns. Mob health is
 shown in the status panel, and a defeated mob respawns after its configured
 8 seconds. The slime pursues nearby players and attacks according to its mob
 data; players have 100 health and respawn at their zone spawn after 3 seconds

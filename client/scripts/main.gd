@@ -24,6 +24,9 @@ var _mob_states: Dictionary = {}
 var _mob_views: Dictionary = {}
 var _slash_key_down: bool = false
 var _heavy_strike_key_down: bool = false
+var _guard_break_key_down: bool = false
+var _whirlwind_key_down: bool = false
+var _second_wind_key_down: bool = false
 var _combat_message_time_remaining: float = 0.0
 
 
@@ -99,6 +102,18 @@ func _physics_process(delta: float) -> void:
 	if not player_is_defeated and heavy_strike_key_pressed and not _heavy_strike_key_down:
 		_request_attack("heavy_strike")
 	_heavy_strike_key_down = heavy_strike_key_pressed
+	var guard_break_key_pressed: bool = Input.is_key_pressed(KEY_Q)
+	if not player_is_defeated and guard_break_key_pressed and not _guard_break_key_down:
+		_request_attack("guard_break")
+	_guard_break_key_down = guard_break_key_pressed
+	var whirlwind_key_pressed: bool = Input.is_key_pressed(KEY_R)
+	if not player_is_defeated and whirlwind_key_pressed and not _whirlwind_key_down:
+		_request_attack("whirlwind")
+	_whirlwind_key_down = whirlwind_key_pressed
+	var second_wind_key_pressed: bool = Input.is_key_pressed(KEY_T)
+	if not player_is_defeated and second_wind_key_pressed and not _second_wind_key_down:
+		_request_attack("second_wind")
+	_second_wind_key_down = second_wind_key_pressed
 
 
 func _process(_delta: float) -> void:

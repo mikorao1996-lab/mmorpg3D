@@ -121,6 +121,27 @@ func run() -> bool:
 		push_error("Transferred player did not reappear in the destination zone")
 		return false
 
+	game_data_registry["abilities"]["second_wind"]["cooldown_seconds"] = 0.0
+	var resource_world: RefCounted = ServerWorldType.new(config, game_data_registry)
+	resource_world.add_player(3)
+	for cast_index: int in range(3):
+		var heal_result: Dictionary = resource_world.cast_ability(
+			3,
+			"second_wind",
+			"",
+		)
+		if not heal_result["accepted"]:
+			push_error("Self heal was rejected while player resource was available")
+			return false
+	var exhausted_result: Dictionary = resource_world.cast_ability(
+		3,
+		"second_wind",
+		"",
+	)
+	if exhausted_result["accepted"] or exhausted_result["reason"] != "resource":
+		push_error("Server world did not enforce ability resource cost")
+		return false
+
 	server_world.remove_player(2)
 	var updated_snapshots: Dictionary = server_world.create_snapshots()
 	if updated_snapshots.has(2):

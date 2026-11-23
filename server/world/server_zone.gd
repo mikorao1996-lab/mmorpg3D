@@ -6,6 +6,7 @@ const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simu
 var zone_id: String
 var _movement_speed: float
 var _player_max_health: float
+var _player_max_resource: float
 var _player_respawn_seconds: float
 var _max_input_magnitude: float
 var _world_half_extent: float
@@ -29,6 +30,7 @@ func _init(
 	zone_id = configured_zone_id
 	_movement_speed = float(config["movement_speed"])
 	_player_max_health = float(config["player_max_health"])
+	_player_max_resource = float(config["player_max_resource"])
 	_player_respawn_seconds = float(config["player_respawn_seconds"])
 	_max_input_magnitude = float(config["max_input_magnitude"])
 	_world_half_extent = float(config["world_half_extent"])
@@ -73,6 +75,7 @@ func add_player_at(peer_id: int, position: Vector3) -> void:
 		"spawn_position": position,
 		"input": Vector2.ZERO,
 		"health": _player_max_health,
+		"resource": _player_max_resource,
 		"respawn_remaining_seconds": 0.0,
 	}
 
@@ -102,6 +105,31 @@ func get_player_state(peer_id: int) -> Dictionary:
 	if not _players.has(peer_id):
 		return {}
 	return _players[peer_id].duplicate(true)
+
+
+func spend_player_resource(peer_id: int, cost: float) -> bool:
+	if not _players.has(peer_id) or not is_finite(cost) or cost < 0.0:
+		return false
+	var player_state: Dictionary = _players[peer_id]
+	if float(player_state["health"]) <= 0.0:
+		return false
+	if float(player_state["resource"]) < cost:
+		return false
+	player_state["resource"] = float(player_state["resource"]) - cost
+	return true
+
+
+func heal_player(peer_id: int, amount: float) -> bool:
+	if not _players.has(peer_id) or not is_finite(amount) or amount <= 0.0:
+		return false
+	var player_state: Dictionary = _players[peer_id]
+	if float(player_state["health"]) <= 0.0:
+		return false
+	player_state["health"] = minf(
+		_player_max_health,
+		float(player_state["health"]) + amount,
+	)
+	return true
 
 
 func damage_player(peer_id: int, damage: float) -> bool:
@@ -261,6 +289,7 @@ func _advance_player_respawns() -> void:
 		)
 		if float(player_state["respawn_remaining_seconds"]) == 0.0:
 			player_state["health"] = _player_max_health
+			player_state["resource"] = _player_max_resource
 			player_state["position"] = player_state["spawn_position"]
 			player_state["input"] = Vector2.ZERO
 

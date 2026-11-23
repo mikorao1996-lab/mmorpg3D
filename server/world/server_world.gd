@@ -76,7 +76,17 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 		result["reason"] = "unknown_ability"
 		return result
 	var ability: Dictionary = abilities[ability_id]
-	if ability["target_type"] != "enemy" or ability["effect_type"] != "damage":
+	if (
+		ability["target_type"] == "enemy"
+		and ability["effect_type"] == "damage"
+	):
+		pass
+	elif (
+		ability["target_type"] == "self"
+		and ability["effect_type"] == "heal"
+	):
+		pass
+	else:
 		result["reason"] = "unsupported_ability"
 		return result
 
@@ -86,6 +96,30 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 	if float(player_state["health"]) <= 0.0:
 		result["reason"] = "player_dead"
 		return result
+
+	var ability_resource_cost: float = float(ability["resource_cost"])
+	if float(player_state["resource"]) < ability_resource_cost:
+		result["reason"] = "resource"
+		return result
+
+	var now_ms: int = Time.get_ticks_msec()
+	var player_cooldowns: Dictionary = _ability_ready_at_ms.get(peer_id, {})
+	if now_ms < int(player_cooldowns.get(ability_id, 0)):
+		result["reason"] = "cooldown"
+		return result
+
+	if ability["target_type"] == "self":
+		if not zone.spend_player_resource(peer_id, ability_resource_cost):
+			result["reason"] = "resource"
+			return result
+		if not zone.heal_player(peer_id, float(ability["magnitude"])):
+			result["reason"] = "invalid_heal_target"
+			return result
+		player_cooldowns[ability_id] = now_ms + ceili(float(ability["cooldown_seconds"]) * 1000.0)
+		_ability_ready_at_ms[peer_id] = player_cooldowns
+		result["accepted"] = true
+		return result
+
 	var target_state: Dictionary = zone.get_mob_state(target_mob_id)
 	if target_state.is_empty():
 		result["reason"] = "target_not_found"
@@ -96,11 +130,6 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 		result["reason"] = "target_dead"
 		return result
 
-	var now_ms: int = Time.get_ticks_msec()
-	var player_cooldowns: Dictionary = _ability_ready_at_ms.get(peer_id, {})
-	if now_ms < int(player_cooldowns.get(ability_id, 0)):
-		result["reason"] = "cooldown"
-		return result
 	var player_position: Vector3 = zone.get_player_position(peer_id)
 	var ability_range: float = float(ability["range"])
 	if (
@@ -111,6 +140,9 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 		return result
 	if not zone.damage_mob(target_mob_id, float(ability["magnitude"])):
 		result["reason"] = "target_dead"
+		return result
+	if not zone.spend_player_resource(peer_id, ability_resource_cost):
+		result["reason"] = "resource"
 		return result
 
 	player_cooldowns[ability_id] = now_ms + ceili(float(ability["cooldown_seconds"]) * 1000.0)

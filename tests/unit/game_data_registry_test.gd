@@ -11,6 +11,9 @@ func run() -> bool:
 		if not registries.has(registry_name) or registries[registry_name].is_empty():
 			push_error("Missing or empty game data registry: %s" % registry_name)
 			return false
+	if registries["abilities"].size() != 5:
+		push_error("Warrior registry must contain exactly five abilities")
+		return false
 
 	var slime: Dictionary = registries["mobs"].get("training_slime", {})
 	if not registries["items"].has("minor_potion") \

@@ -22,6 +22,39 @@
       "range": 2.5,
       "effect_type": "damage",
       "magnitude": 15
+    },
+    {
+      "id": "guard_break",
+      "name_key": "ability_guard_break",
+      "class_id": "warrior",
+      "target_type": "enemy",
+      "cooldown_seconds": 4.0,
+      "resource_cost": 10,
+      "range": 2.5,
+      "effect_type": "damage",
+      "magnitude": 12
+    },
+    {
+      "id": "whirlwind",
+      "name_key": "ability_whirlwind",
+      "class_id": "warrior",
+      "target_type": "enemy",
+      "cooldown_seconds": 6.0,
+      "resource_cost": 20,
+      "range": 3.0,
+      "effect_type": "damage",
+      "magnitude": 18
+    },
+    {
+      "id": "second_wind",
+      "name_key": "ability_second_wind",
+      "class_id": "warrior",
+      "target_type": "self",
+      "cooldown_seconds": 10.0,
+      "resource_cost": 30,
+      "range": 0.0,
+      "effect_type": "heal",
+      "magnitude": 30
     }
   ]
 }
