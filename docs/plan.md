@@ -18,12 +18,13 @@
 - **Phase 3:** серверная симуляция движения, prediction/interpolation, AOI, отключение сущностей и тестовые zone transfer.
 - **Phase 4 — JSON:** versioned registries items/abilities/mobs/quests, загрузка и валидация данных на старте.
 - **Phase 5 — основа боя:** `starter_slash` и `heavy_strike`, training slime с серверным aggro/chase/attack, здоровье игрока, смерть и респавн; локализованный HUD.
+- **PostgreSQL driver spike для Windows:** собрана и подписана x64 GDExtension с параметризованными запросами, явными ошибками и транзакциями. Изолированный PostgreSQL 18 cluster на `127.0.0.1:55432`, load test и полный spike с параметрами, rollback, commit, recovery и close прошли. DLL локально проверена через `signtool /pa`.
 
-Последняя проверенная версия — commit `425d24f`. На Godot 4.7.2 проходят импорт, unit-тесты (`UNIT_TESTS_OK`), сетевой loopback (`COMBAT_LOOPBACK_OK`) и headless smoke клиента/сервера.
+Последняя проверенная версия — commit `86d82af`. На Godot 4.7.2 проходят импорт, unit-тесты (`UNIT_TESTS_OK`) и сетевой loopback (`COMBAT_LOOPBACK_OK`). Windows PostgreSQL load/spike проходят (`POSTGRES_DRIVER_LOAD_OK`, `POSTGRES_DRIVER_SPIKE_OK`).
 
 ### Не завершено
 
-- **PostgreSQL:** миграции и repositories отсутствуют. Не выбран и не проверен совместимый с Godot/GDScript способ прямого подключения.
+- **PostgreSQL:** Windows spike завершён, но миграции и repositories отсутствуют. Linux-проверка GDExtension и репозиториев ещё не выполнена.
 - **Phase 5 capabilities:** доступны все 5 способностей warrior с server-authoritative cooldown, range, resource cost и heal/damage validation; training slime и здоровье/респавн игрока реализованы.
 - **Не завершено в Phase 5:** уровни и полный набор характеристик, второй тип моба и мини-босс, лут, инвентарь, экипировка, квесты, NPC, торговля и чат.
 - **Phase 6:** login/character-select и законченный игровой UI ещё не реализованы.
@@ -32,21 +33,23 @@
 
 ## Следующие задачи по приоритету
 
-### 1. PostgreSQL driver spike — в работе
+### 1. PostgreSQL driver spike — Windows завершён, Linux ожидает перезагрузки
 
 - Установлены Python/SCons и Visual Studio C++ Build Tools; собран минимальный Windows x64 GDExtension поверх `libpq` для Godot 4.7.2.
 - Добавлены параметризованные запросы, явные ошибки, транзакции и тесты. Расширение пока не подключено к игровому серверу.
 - Системная служба PostgreSQL 19 сейчас остановлена; в её каталоге отсутствуют `pg_ctl.exe` и `postgres.exe`. Изолированный тестовый кластер инициализирован, но не запущен. Существующий каталог данных службы не изменять.
-- Полная сборка PostgreSQL 18 установлена в `C:\Program Files\PostgreSQL\18`; серверный cluster для spike запущен отдельно на `127.0.0.1:55432`, база отвечает запросам через `psql`.
-- PostgreSQL spike не считается завершённым: Windows Smart App Control блокирует unsigned GDExtension DLL с кодом `4551`, а доступного trusted code-signing сертификата нет. Изолированный cluster 18 остановлен после проверочного запроса.
-- Linux headless-проверка заблокирована отсутствием WSL, Docker/podman и Linux toolchain в текущем окружении.
-- Первая проверка обнаружила конфликт имени `is_connected()` со встроенным методом Godot; API переименован в `is_db_connected()`, исправление ожидает повторной проверки.
-- Повторная загрузочная проверка выполнена: исходный конфликт имени устранён в коде, но Windows Application Control блокирует локально собранный unsigned DLL с кодом `4551`; unit/network smoke проходят без участия PostgreSQL-драйвера.
-- Локальная установка PostgreSQL неполная: отсутствуют `postgres.exe` и `pg_ctl.exe`, поэтому isolated test cluster запустить в текущем окружении нельзя без восстановления server binaries.
-- Полный smoke-test с реальной БД и проверка Linux headless ещё не завершены.
+- Полная сборка PostgreSQL 18 установлена в `C:\Program Files\PostgreSQL\18`; изолированный cluster для spike проверен на `127.0.0.1:55432`, затем остановлен.
+- Windows Smart App Control устранён локальной подписью DLL development-сертификатом с добавлением сертификата в Root и TrustedPublisher. `signtool /pa` и загрузка GDExtension проходят.
+- Компоненты WSL и VirtualMachinePlatform включены через DISM, но необходима перезагрузка Windows; до перезагрузки Linux-команды недоступны.
+- Linux headless-проверка и сборка GDExtension для Linux ещё не выполнены.
+- Первая проверка обнаружила конфликт имени `is_connected()` со встроенным методом Godot; API переименован в `is_db_connected()` и успешно проверен в load/spike test.
+- Повторная загрузочная проверка выполнена после подписания; unit/network smoke проходят вместе с загруженным PostgreSQL-драйвером.
+- Полный smoke-test с реальной БД прошёл на Windows. Проверка Linux headless остаётся обязательной.
 - Готовый `finepointcgi/Godot-4-Postgre-Plugin` не использовать без исправлений: async-вызовы синхронны, пул может ждать бесконечно при неудачном подключении, ошибки запросов смешаны с пустым результатом, число параметров ограничено пятью, SQL и параметры печатаются в лог. `lwilson2048/GodotPostgres` — незавершённый шаблон.
 
-**Следующее действие:** получить trusted code-signing сертификат и административный доступ для enabling WSL; затем пройти загрузку DLL, parameterized query, transaction, error handling и close на Windows. После этого собрать и проверить Linux headless. Миграции и repositories не начинать, пока оба целевых окружения не проверены.
+**Следующее действие:** перезагрузить Windows, установить одну Ubuntu/distro через `wsl --install`, проверить Linux toolchain и собрать Linux x64 GDExtension поверх `libpq-dev`. Затем запустить изолированный PostgreSQL в Linux и повторить parameterized query, transactions, error handling и close.
+
+Миграции и repositories начинать только после успешной загрузки и smoke-проверки драйвера на Windows и Linux.
 
 Docker необязателен; PostgreSQL остаётся обязательным, SQLite не является заменой.
 
