@@ -51,6 +51,8 @@ func _ready() -> void:
 	server_listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
 	server_listener.ability_cast_requested.connect(_on_ability_cast_requested)
 	server_listener.loot_pickup_requested.connect(_on_loot_pickup_requested)
+	server_listener.equip_item_requested.connect(_on_equip_item_requested)
+	server_listener.unequip_item_requested.connect(_on_unequip_item_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
 
@@ -89,3 +91,13 @@ func _on_ability_cast_requested(peer_id: int, ability_id: String, target_mob_id:
 func _on_loot_pickup_requested(peer_id: int, drop_id: int) -> void:
 	var result: Dictionary = server_world.pickup_loot(peer_id, drop_id)
 	server_listener.send_loot_pickup_result(peer_id, result)
+
+
+func _on_equip_item_requested(peer_id: int, item_id: String) -> void:
+	var result: Dictionary = server_world.equip_item(peer_id, item_id)
+	server_listener.send_equipment_result(peer_id, "equip", result)
+
+
+func _on_unequip_item_requested(peer_id: int, slot_id: String) -> void:
+	var result: Dictionary = server_world.unequip_item(peer_id, slot_id)
+	server_listener.send_equipment_result(peer_id, "unequip", result)

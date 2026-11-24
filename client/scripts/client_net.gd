@@ -18,6 +18,13 @@ signal ability_cast_completed(
 	max_health: float,
 )
 signal loot_pickup_completed(accepted: bool, reason: String, item_id: String)
+signal equipment_action_completed(
+	operation: String,
+	accepted: bool,
+	reason: String,
+	item_id: String,
+	slot_id: String,
+)
 
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
@@ -142,6 +149,29 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 				push_warning("Rejected malformed loot pickup result")
 				return
 			loot_pickup_completed.emit(accepted_value, reason_value, item_id_value)
+		ProtocolConstantsType.OPCODE_EQUIPMENT_RESULT:
+			var operation_value: Variant = payload.get("operation", null)
+			var accepted_value: Variant = payload.get("accepted", null)
+			var reason_value: Variant = payload.get("reason", null)
+			var item_id_value: Variant = payload.get("item_id", null)
+			var slot_id_value: Variant = payload.get("slot_id", null)
+			if (
+				operation_value is not String
+				or not ["equip", "unequip"].has(operation_value)
+				or accepted_value is not bool
+				or reason_value is not String
+				or item_id_value is not String
+				or slot_id_value is not String
+			):
+				push_warning("Rejected malformed equipment result")
+				return
+			equipment_action_completed.emit(
+				operation_value,
+				accepted_value,
+				reason_value,
+				item_id_value,
+				slot_id_value,
+			)
 		ProtocolConstantsType.OPCODE_KEEPALIVE_ACK:
 			pass
 
@@ -192,6 +222,26 @@ func request_loot_pickup(drop_id: int) -> Error:
 		return ERR_INVALID_PARAMETER
 	return send_packet(ProtocolConstantsType.OPCODE_LOOT_PICKUP, {
 		"drop_id": drop_id,
+	})
+
+
+func request_equip_item(item_id: String) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if item_id.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_EQUIP_ITEM, {
+		"item_id": item_id,
+	})
+
+
+func request_unequip_item(slot_id: String) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if slot_id.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_UNEQUIP_ITEM, {
+		"slot_id": slot_id,
 	})
 
 

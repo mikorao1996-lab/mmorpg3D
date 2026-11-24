@@ -43,6 +43,18 @@ func add_item(item_id: String, item_definition: Dictionary) -> Dictionary:
 	return {"ok": true, "reason": ""}
 
 
+func remove_item(item_id: String) -> Dictionary:
+	for slot_index: int in range(_slots.size()):
+		if _slots[slot_index]["item_id"] != item_id:
+			continue
+		if int(_slots[slot_index]["quantity"]) == 1:
+			_slots.remove_at(slot_index)
+		else:
+			_slots[slot_index]["quantity"] = int(_slots[slot_index]["quantity"]) - 1
+		return {"ok": true, "reason": ""}
+	return {"ok": false, "reason": "item_not_in_inventory"}
+
+
 func get_snapshot() -> Array:
 	var snapshot: Array = []
 	for slot: Dictionary in _slots:

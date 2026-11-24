@@ -3,6 +3,7 @@ extends RefCounted
 
 const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simulation.gd")
 const InventoryComponentType: GDScript = preload("res://server/systems/inventory_component.gd")
+const EquipmentComponentType: GDScript = preload("res://server/systems/equipment_component.gd")
 
 var zone_id: String
 var _movement_speed: float
@@ -280,6 +281,122 @@ func pickup_loot(peer_id: int, drop_id: int) -> Dictionary:
 	return result
 
 
+func equip_item(peer_id: int, item_id: String) -> Dictionary:
+	var result: Dictionary = {
+		"accepted": false,
+		"reason": "",
+		"item_id": item_id,
+		"slot_id": "",
+	}
+	if not _players.has(peer_id):
+		result["reason"] = "invalid_player"
+		return result
+	var player_state: Dictionary = _players[peer_id]
+	if float(player_state["health"]) <= 0.0:
+		result["reason"] = "player_dead"
+		return result
+	if not _item_definitions.has(item_id):
+		result["reason"] = "unknown_item"
+		return result
+	var item_definition: Dictionary = _item_definitions[item_id]
+	var slot_id: String = str(item_definition.get("equipment_slot", ""))
+	var equipment: RefCounted = player_state["equipment"]
+	if slot_id.is_empty() or not equipment.call("has_slot", slot_id):
+		result["reason"] = "not_equippable"
+		return result
+	if int(player_state["level"]) < int(item_definition["level_requirement"]):
+		result["reason"] = "level_requirement"
+		result["slot_id"] = slot_id
+		return result
+
+	var inventory: RefCounted = player_state["inventory"]
+	var removal_result: Dictionary = inventory.call("remove_item", item_id)
+	if not bool(removal_result.get("ok", false)):
+		result["reason"] = str(removal_result.get("reason", "inventory_error"))
+		result["slot_id"] = slot_id
+		return result
+	var previous_item_id: String = equipment.call("get_item_id", slot_id)
+	if not previous_item_id.is_empty():
+		var previous_definition: Dictionary = _item_definitions.get(previous_item_id, {})
+		var restore_result: Dictionary = inventory.call(
+			"add_item",
+			previous_item_id,
+			previous_definition,
+		)
+		if not bool(restore_result.get("ok", false)):
+			var rollback_result: Dictionary = inventory.call("add_item", item_id, item_definition)
+			if not bool(rollback_result.get("ok", false)):
+				push_error("Could not roll back failed equipment replacement for peer %d" % peer_id)
+			result["reason"] = "inventory_full"
+			result["slot_id"] = slot_id
+			return result
+	if not equipment.call("set_item_id", slot_id, item_id):
+		if not previous_item_id.is_empty():
+			var previous_rollback_result: Dictionary = inventory.call(
+				"remove_item",
+				previous_item_id,
+			)
+			if not bool(previous_rollback_result.get("ok", false)):
+				push_error("Could not restore replaced equipment for peer %d" % peer_id)
+		var rollback_result: Dictionary = inventory.call("remove_item", item_id)
+		if not bool(rollback_result.get("ok", false)):
+			rollback_result = inventory.call("add_item", item_id, item_definition)
+		if not bool(rollback_result.get("ok", false)):
+			push_error("Could not roll back failed equipment update for peer %d" % peer_id)
+		result["reason"] = "equipment_error"
+		result["slot_id"] = slot_id
+		return result
+	_refresh_equipment_stats(player_state)
+	result["accepted"] = true
+	result["slot_id"] = slot_id
+	return result
+
+
+func unequip_item(peer_id: int, slot_id: String) -> Dictionary:
+	var result: Dictionary = {
+		"accepted": false,
+		"reason": "",
+		"item_id": "",
+		"slot_id": slot_id,
+	}
+	if not _players.has(peer_id):
+		result["reason"] = "invalid_player"
+		return result
+	var player_state: Dictionary = _players[peer_id]
+	if float(player_state["health"]) <= 0.0:
+		result["reason"] = "player_dead"
+		return result
+	var equipment: RefCounted = player_state["equipment"]
+	if not equipment.call("has_slot", slot_id):
+		result["reason"] = "invalid_slot"
+		return result
+	var item_id: String = equipment.call("get_item_id", slot_id)
+	if item_id.is_empty():
+		result["reason"] = "slot_empty"
+		return result
+	var inventory: RefCounted = player_state["inventory"]
+	var add_result: Dictionary = inventory.call(
+		"add_item",
+		item_id,
+		_item_definitions[item_id],
+	)
+	if not bool(add_result.get("ok", false)):
+		result["reason"] = str(add_result.get("reason", "inventory_error"))
+		result["item_id"] = item_id
+		return result
+	if not equipment.call("set_item_id", slot_id, ""):
+		var rollback_result: Dictionary = inventory.call("remove_item", item_id)
+		if not bool(rollback_result.get("ok", false)):
+			push_error("Could not roll back failed unequip for peer %d" % peer_id)
+		result["reason"] = "equipment_error"
+		result["item_id"] = item_id
+		return result
+	_refresh_equipment_stats(player_state)
+	result["accepted"] = true
+	result["item_id"] = item_id
+	return result
+
+
 func set_input_direction(peer_id: int, input_direction: Vector2) -> bool:
 	if not _players.has(peer_id):
 		return false
@@ -465,6 +582,7 @@ func _create_snapshot_for(observer_id: int) -> Dictionary:
 			drop["position"],
 		])
 	var inventory: RefCounted = observer_state["inventory"]
+	var equipment: RefCounted = observer_state["equipment"]
 	return {
 		"zone_id": zone_id,
 		"server_time_ms": Time.get_ticks_msec(),
@@ -472,6 +590,7 @@ func _create_snapshot_for(observer_id: int) -> Dictionary:
 		"mobs": mob_states,
 		"drops": drop_states,
 		"inventory": inventory.call("get_snapshot"),
+		"equipment": equipment.call("get_snapshot"),
 	}
 
 
@@ -489,8 +608,13 @@ func _create_player_state(position: Vector3) -> Dictionary:
 		"experience": 0,
 		"attack_multiplier": float(initial_definition["attack_multiplier"]),
 		"defense": float(initial_definition["defense"]),
+		"base_max_health": float(initial_definition["max_health"]),
+		"base_max_resource": float(initial_definition["max_resource"]),
+		"base_defense": float(initial_definition["defense"]),
+		"equipment_attack": 0.0,
 		"respawn_remaining_seconds": 0.0,
 		"inventory": InventoryComponentType.new(_inventory_slot_count),
+		"equipment": EquipmentComponentType.new(),
 	}
 
 
@@ -499,13 +623,42 @@ func _apply_level_definition(
 	level_definition: Dictionary,
 ) -> void:
 	var health_ratio: float = float(player_state["health"]) / float(player_state["max_health"])
-	var resource_ratio: float = (
-		float(player_state["resource"]) / float(player_state["max_resource"])
-	)
+	var resource_ratio: float = float(player_state["resource"]) / float(player_state["max_resource"])
 	player_state["level"] = int(level_definition["level"])
-	player_state["max_health"] = float(level_definition["max_health"])
-	player_state["max_resource"] = float(level_definition["max_resource"])
+	player_state["base_max_health"] = float(level_definition["max_health"])
+	player_state["base_max_resource"] = float(level_definition["max_resource"])
+	player_state["base_defense"] = float(level_definition["defense"])
+	player_state["attack_multiplier"] = float(level_definition["attack_multiplier"])
+	_refresh_equipment_stats(player_state, health_ratio, resource_ratio)
+
+
+func _refresh_equipment_stats(
+	player_state: Dictionary,
+	health_ratio: float = -1.0,
+	resource_ratio: float = -1.0,
+) -> void:
+	if health_ratio < 0.0:
+		health_ratio = float(player_state["health"]) / float(player_state["max_health"])
+	if resource_ratio < 0.0:
+		resource_ratio = float(player_state["resource"]) / float(player_state["max_resource"])
+	var bonuses: Dictionary = {
+		"attack": 0.0,
+		"defense": 0.0,
+		"health": 0.0,
+		"resource": 0.0,
+	}
+	var equipment: RefCounted = player_state["equipment"]
+	var equipped_items: Dictionary = equipment.call("get_equipped_item_ids")
+	for item_id: String in equipped_items.values():
+		if item_id.is_empty():
+			continue
+		var item_definition: Dictionary = _item_definitions.get(item_id, {})
+		var item_stats: Dictionary = item_definition.get("stats", {})
+		for stat_name: String in bonuses:
+			bonuses[stat_name] += float(item_stats.get(stat_name, 0.0))
+	player_state["equipment_attack"] = bonuses["attack"]
+	player_state["max_health"] = float(player_state["base_max_health"]) + bonuses["health"]
+	player_state["max_resource"] = float(player_state["base_max_resource"]) + bonuses["resource"]
+	player_state["defense"] = float(player_state["base_defense"]) + bonuses["defense"]
 	player_state["health"] = float(player_state["max_health"]) * health_ratio
 	player_state["resource"] = float(player_state["max_resource"]) * resource_ratio
-	player_state["attack_multiplier"] = float(level_definition["attack_multiplier"])
-	player_state["defense"] = float(level_definition["defense"])

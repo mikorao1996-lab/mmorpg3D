@@ -21,6 +21,9 @@ File: `resources/data/items.json`
 
 - `id`, `name_key`: non-empty strings.
 - `item_type`: `weapon`, `armor`, `consumable`, or `quest`.
+- Weapons require `equipment_slot: "weapon"`; armor requires one of `head`,
+  `chest`, `hands`, `legs`, or `feet`. Consumables and quest items do not have
+  an equipment slot. Weapons and armor have `stack_limit: 1`.
 - `stack_limit`, `level_requirement`: integers >= 1.
 - `sell_price`: integer >= 0.
 - `stats`: object with optional `attack`, `defense`, `health`, or `resource`

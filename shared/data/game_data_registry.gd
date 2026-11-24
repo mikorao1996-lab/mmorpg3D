@@ -9,6 +9,15 @@ const REGISTRY_PATHS: Dictionary = {
 	"quests": "res://resources/data/quests.json",
 }
 const ITEM_TYPES: PackedStringArray = ["weapon", "armor", "consumable", "quest"]
+const EQUIPMENT_SLOTS: PackedStringArray = [
+	"weapon",
+	"head",
+	"chest",
+	"hands",
+	"legs",
+	"feet",
+]
+const ARMOR_SLOTS: PackedStringArray = ["head", "chest", "hands", "legs", "feet"]
 const TARGET_TYPES: PackedStringArray = ["self", "ally", "enemy"]
 const ABILITY_EFFECT_TYPES: PackedStringArray = ["damage", "heal", "buff"]
 const QUEST_OBJECTIVE_TYPES: PackedStringArray = ["kill", "collect", "talk"]
@@ -96,9 +105,34 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 		return "missing non-empty id"
 	match registry_name:
 		"items":
+			var item_type: Variant = entry.get("item_type")
+			var equipment_slot: Variant = entry.get("equipment_slot", "")
+			var equipment_slot_valid: bool = (
+				(item_type == "weapon" and equipment_slot == "weapon")
+				or (
+					item_type == "armor"
+					and equipment_slot is String
+					and ARMOR_SLOTS.has(equipment_slot)
+				)
+				or (
+					(item_type == "consumable" or item_type == "quest")
+					and equipment_slot == ""
+				)
+			)
+			var is_equipment_item: bool = item_type == "weapon" or item_type == "armor"
+			var stack_limit_value: Variant = entry.get("stack_limit")
+			var equipment_stack_limit_valid: bool = (
+				not is_equipment_item
+				or (
+					_is_integer_at_least(stack_limit_value, 1)
+					and float(stack_limit_value) == 1.0
+				)
+			)
 			if (
 				not _is_non_empty_string(entry.get("name_key"))
 				or not _is_enum_value(entry.get("item_type"), ITEM_TYPES)
+				or not equipment_slot_valid
+				or not equipment_stack_limit_valid
 				or not _is_integer_at_least(entry.get("stack_limit"), 1)
 				or not _is_integer_at_least(entry.get("level_requirement"), 1)
 				or not _is_integer_at_least(entry.get("sell_price"), 0)

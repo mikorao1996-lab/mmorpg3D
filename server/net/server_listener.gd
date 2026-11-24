@@ -7,6 +7,8 @@ signal movement_intent(peer_id: int, input_direction: Vector2)
 signal zone_transfer_requested(peer_id: int, zone_id: String)
 signal ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: String)
 signal loot_pickup_requested(peer_id: int, drop_id: int)
+signal equip_item_requested(peer_id: int, item_id: String)
+signal unequip_item_requested(peer_id: int, slot_id: String)
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
@@ -87,6 +89,10 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 		handle_ability_cast(session, peer_id, payload)
 	elif opcode == ProtocolConstantsType.OPCODE_LOOT_PICKUP:
 		handle_loot_pickup(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_EQUIP_ITEM:
+		handle_equip_item(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_UNEQUIP_ITEM:
+		handle_unequip_item(session, peer_id, payload)
 	else:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
@@ -158,6 +164,28 @@ func handle_loot_pickup(session: RefCounted, peer_id: int, payload: Dictionary) 
 		push_warning("Rejected malformed loot pickup from peer %d" % peer_id)
 		return
 	loot_pickup_requested.emit(peer_id, drop_id_value)
+
+
+func handle_equip_item(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("Equipment request before authentication from peer %d" % peer_id)
+		return
+	var item_id_value: Variant = payload.get("item_id")
+	if item_id_value is not String or item_id_value.strip_edges().is_empty():
+		push_warning("Rejected malformed equip request from peer %d" % peer_id)
+		return
+	equip_item_requested.emit(peer_id, item_id_value)
+
+
+func handle_unequip_item(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("Equipment request before authentication from peer %d" % peer_id)
+		return
+	var slot_id_value: Variant = payload.get("slot_id")
+	if slot_id_value is not String or slot_id_value.strip_edges().is_empty():
+		push_warning("Rejected malformed unequip request from peer %d" % peer_id)
+		return
+	unequip_item_requested.emit(peer_id, slot_id_value)
 
 
 func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
@@ -232,6 +260,28 @@ func send_loot_pickup_result(peer_id: int, result: Dictionary) -> void:
 	)
 	if send_error != OK:
 		push_warning("Failed to send loot pickup result to peer %d: %s" % [peer_id, send_error])
+
+
+func send_equipment_result(peer_id: int, operation: String, result: Dictionary) -> void:
+	if not sessions.has(peer_id):
+		push_warning("Cannot send equipment result to missing peer %d" % peer_id)
+		return
+	var session: RefCounted = sessions[peer_id]
+	if not session.authenticated:
+		push_warning("Cannot send equipment result to unauthenticated peer %d" % peer_id)
+		return
+	var send_error: Error = session.send(
+		ProtocolConstantsType.OPCODE_EQUIPMENT_RESULT,
+		{
+			"operation": operation,
+			"accepted": bool(result.get("accepted", false)),
+			"reason": str(result.get("reason", "equipment_error")),
+			"item_id": str(result.get("item_id", "")),
+			"slot_id": str(result.get("slot_id", "")),
+		},
+	)
+	if send_error != OK:
+		push_warning("Failed to send equipment result to peer %d: %s" % [peer_id, send_error])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

@@ -58,6 +58,16 @@ func run() -> bool:
 	if GameDataRegistryType.validate_entry("items", invalid_item).is_empty():
 		push_error("Game data registry accepted a fractional integer field")
 		return false
+	invalid_item["stack_limit"] = 1
+	invalid_item["equipment_slot"] = "head"
+	if GameDataRegistryType.validate_entry("items", invalid_item).is_empty():
+		push_error("Game data registry accepted a weapon in an armor slot")
+		return false
+	invalid_item["equipment_slot"] = "weapon"
+	invalid_item["stack_limit"] = 2
+	if GameDataRegistryType.validate_entry("items", invalid_item).is_empty():
+		push_error("Game data registry accepted a stackable equipment item")
+		return false
 
 	var invalid_references: Dictionary = registries.duplicate(true)
 	invalid_references["quests"]["slime_problem"]["objective_target"] = "missing_mob"

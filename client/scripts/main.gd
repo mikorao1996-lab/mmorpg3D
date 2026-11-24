@@ -25,12 +25,15 @@ var _mob_views: Dictionary = {}
 var _drop_states: Dictionary = {}
 var _drop_views: Dictionary = {}
 var _inventory_state: Array[Dictionary] = []
+var _equipment_state: Dictionary = {}
 var _slash_key_down: bool = false
 var _heavy_strike_key_down: bool = false
 var _guard_break_key_down: bool = false
 var _whirlwind_key_down: bool = false
 var _second_wind_key_down: bool = false
 var _loot_key_down: bool = false
+var _equip_key_down: bool = false
+var _unequip_key_down: bool = false
 var _combat_message_time_remaining: float = 0.0
 
 
@@ -54,6 +57,7 @@ func _ready() -> void:
 	_client_net.world_snapshot.connect(_on_world_snapshot)
 	_client_net.ability_cast_completed.connect(_on_ability_cast_completed)
 	_client_net.loot_pickup_completed.connect(_on_loot_pickup_completed)
+	_client_net.equipment_action_completed.connect(_on_equipment_action_completed)
 
 	var error: Error = _client_net.connect_to_server("127.0.0.1")
 	if error != OK:
@@ -123,6 +127,14 @@ func _physics_process(delta: float) -> void:
 	if not player_is_defeated and loot_key_pressed and not _loot_key_down:
 		_request_nearest_loot()
 	_loot_key_down = loot_key_pressed
+	var equip_key_pressed: bool = Input.is_key_pressed(KEY_G)
+	if not player_is_defeated and equip_key_pressed and not _equip_key_down:
+		_request_equip_first_item()
+	_equip_key_down = equip_key_pressed
+	var unequip_key_pressed: bool = Input.is_key_pressed(KEY_H)
+	if not player_is_defeated and unequip_key_pressed and not _unequip_key_down:
+		_request_unequip_first_item()
+	_unequip_key_down = unequip_key_pressed
 
 
 func _process(_delta: float) -> void:
@@ -198,6 +210,27 @@ func _on_loot_pickup_completed(accepted: bool, reason: String, item_id: String) 
 	_combat_message_time_remaining = 2.0
 
 
+func _on_equipment_action_completed(
+	operation: String,
+	accepted: bool,
+	reason: String,
+	item_id: String,
+	slot_id: String,
+) -> void:
+	if accepted:
+		var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
+		if item_definition.is_empty():
+			push_error("Equipment result referenced unknown item %s" % item_id)
+			return
+		status_label.text = tr("equipment_action_success") % [
+			tr(item_definition["name_key"]),
+			tr("equipment_slot_" + slot_id),
+		]
+	else:
+		status_label.text = tr("equipment_action_failed") % tr("equipment_reason_" + reason)
+	_combat_message_time_remaining = 2.0
+
+
 func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var player_entries: Variant = snapshot.get("players", null)
 	if not player_entries is Array:
@@ -218,6 +251,28 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	):
 		push_warning("Rejected malformed inventory in world snapshot")
 		return
+	var equipment_entries: Variant = snapshot.get("equipment", null)
+	if (
+		not equipment_entries is Dictionary
+		or equipment_entries.size() != GameDataRegistryType.EQUIPMENT_SLOTS.size()
+	):
+		push_warning("Rejected malformed equipment in world snapshot")
+		return
+	var equipment_state: Dictionary = {}
+	for slot_id: String in GameDataRegistryType.EQUIPMENT_SLOTS:
+		var item_id: Variant = equipment_entries.get(slot_id, null)
+		if item_id is not String:
+			push_warning("Rejected malformed equipment slot")
+			return
+		if not item_id.is_empty():
+			var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
+			if (
+				item_definition.is_empty()
+				or str(item_definition.get("equipment_slot", "")) != slot_id
+			):
+				push_warning("Rejected invalid equipped item %s" % item_id)
+				return
+		equipment_state[slot_id] = item_id
 
 	var positions: Dictionary = {}
 	var player_health_states: Dictionary = {}
@@ -360,6 +415,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	_mob_states = new_mob_states
 	_drop_states = new_drop_states
 	_inventory_state = inventory_state
+	_equipment_state = equipment_state
 	var existing_mob_ids: Array = _mob_views.keys()
 	for mob_id: String in existing_mob_ids:
 		if not _mob_states.has(mob_id):
@@ -552,7 +608,48 @@ func _update_combat_status() -> void:
 		int(_simulation_config["inventory_slot_count"]),
 		inventory_summary,
 	]
-	status_label.text = combat_summary + "\n" + inventory_line
+	var equipment_names: PackedStringArray = []
+	for slot_id: String in GameDataRegistryType.EQUIPMENT_SLOTS:
+		var item_id: String = str(_equipment_state.get(slot_id, ""))
+		if item_id.is_empty():
+			continue
+		var item_definition: Dictionary = _game_data_registry["items"][item_id]
+		equipment_names.append(
+			"%s: %s" % [
+				tr("equipment_slot_" + slot_id),
+				tr(item_definition["name_key"]),
+			],
+		)
+	var equipment_summary: String = tr("equipment_empty")
+	if not equipment_names.is_empty():
+		equipment_summary = ", ".join(equipment_names)
+	var equipment_line: String = tr("equipment_status") % equipment_summary
+	status_label.text = combat_summary + "\n" + inventory_line + "\n" + equipment_line
+
+
+func _request_equip_first_item() -> void:
+	for slot: Dictionary in _inventory_state:
+		var item_definition: Dictionary = _game_data_registry["items"][slot["item_id"]]
+		if not item_definition.has("equipment_slot"):
+			continue
+		var error: Error = _client_net.request_equip_item(slot["item_id"])
+		if error != OK:
+			push_warning("Could not request item equip: %s" % error)
+		return
+	status_label.text = tr("equipment_no_item")
+	_combat_message_time_remaining = 1.0
+
+
+func _request_unequip_first_item() -> void:
+	for slot_id: String in GameDataRegistryType.EQUIPMENT_SLOTS:
+		if str(_equipment_state.get(slot_id, "")).is_empty():
+			continue
+		var error: Error = _client_net.request_unequip_item(slot_id)
+		if error != OK:
+			push_warning("Could not request item unequip: %s" % error)
+		return
+	status_label.text = tr("equipment_nothing_equipped")
+	_combat_message_time_remaining = 1.0
 
 
 func _request_nearest_loot() -> void:

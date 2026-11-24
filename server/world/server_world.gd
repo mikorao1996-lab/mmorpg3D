@@ -140,6 +140,7 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 		return result
 	var damage: float = (
 		float(ability["magnitude"]) * float(player_state["attack_multiplier"])
+		+ float(player_state["equipment_attack"])
 	)
 	if not zone.damage_mob(target_mob_id, damage):
 		result["reason"] = "target_dead"
@@ -183,6 +184,30 @@ func pickup_loot(peer_id: int, drop_id: int) -> Dictionary:
 		}
 	var zone: RefCounted = _zones[_peer_zones[peer_id]]
 	return zone.pickup_loot(peer_id, drop_id)
+
+
+func equip_item(peer_id: int, item_id: String) -> Dictionary:
+	if not _peer_zones.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"item_id": item_id,
+			"slot_id": "",
+		}
+	var zone: RefCounted = _zones[_peer_zones[peer_id]]
+	return zone.equip_item(peer_id, item_id)
+
+
+func unequip_item(peer_id: int, slot_id: String) -> Dictionary:
+	if not _peer_zones.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"item_id": "",
+			"slot_id": slot_id,
+		}
+	var zone: RefCounted = _zones[_peer_zones[peer_id]]
+	return zone.unequip_item(peer_id, slot_id)
 
 
 func advance(delta: float) -> bool:

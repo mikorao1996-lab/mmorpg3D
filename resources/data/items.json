@@ -5,6 +5,7 @@
       "id": "starter_sword",
       "name_key": "item_starter_sword",
       "item_type": "weapon",
+      "equipment_slot": "weapon",
       "stack_limit": 1,
       "level_requirement": 1,
       "sell_price": 5,
