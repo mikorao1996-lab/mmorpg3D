@@ -50,6 +50,7 @@ func _ready() -> void:
 	server_listener.movement_intent.connect(_on_movement_intent)
 	server_listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
 	server_listener.ability_cast_requested.connect(_on_ability_cast_requested)
+	server_listener.loot_pickup_requested.connect(_on_loot_pickup_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
 
@@ -83,3 +84,8 @@ func _on_zone_transfer_requested(peer_id: int, zone_id: String) -> void:
 func _on_ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: String) -> void:
 	var result: Dictionary = server_world.cast_ability(peer_id, ability_id, target_mob_id)
 	server_listener.send_ability_cast_result(peer_id, result)
+
+
+func _on_loot_pickup_requested(peer_id: int, drop_id: int) -> void:
+	var result: Dictionary = server_world.pickup_loot(peer_id, drop_id)
+	server_listener.send_loot_pickup_result(peer_id, result)

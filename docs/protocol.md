@@ -2,7 +2,7 @@
 
 ## Bootstrap protocol constants
 
-- Protocol version: `3`
+- Protocol version: `4`
 - Snapshot channel: `0`, unreliable.
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
@@ -37,6 +37,8 @@ Opcodes:
 - `9`: `ZONE_TRANSFER_RESULT`
 - `10`: `ABILITY_CAST`
 - `11`: `ABILITY_CAST_RESULT`
+- `12`: `LOOT_PICKUP`
+- `13`: `LOOT_PICKUP_RESULT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 
@@ -63,6 +65,17 @@ snapshots are routed only within the player's current zone.
 
 `WORLD_SNAPSHOT` also contains a `mobs` array of
 `[mob_id, position, health, max_health]` entries for the current zone.
+Snapshots also contain `drops` entries in the form
+`[drop_id, item_id, position]` and the observing player's `inventory` as
+`[item_id, quantity]` slots. Drops are filtered to the observer's interest
+radius. Each configured mob loot item is a guaranteed drop for this vertical
+slice. Drops remain in the zone until picked up.
+`LOOT_PICKUP` is a reliable request containing `drop_id`; only authenticated
+peers can request pickup. The server verifies that the drop exists in the
+player's current zone, is within `loot_pickup_range`, and fits in the
+session-only inventory before removing it. `LOOT_PICKUP_RESULT` reliably
+contains `accepted`, `reason`, and `item_id`. A full inventory or failed
+range check leaves the drop in the world.
 Mobs pursue the nearest living player inside their configured aggro range and
 attack at their data-defined range and interval. Player health, defeat, and
 respawn are server-authoritative; defeated players respawn at the current

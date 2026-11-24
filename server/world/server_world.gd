@@ -162,10 +162,27 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 				"Could not award experience to peer %d: %s"
 				% [peer_id, str(experience_result.get("error", "Unknown error."))],
 			)
+		var loot_result: Dictionary = zone.spawn_loot_for_mob(target_mob_id)
+		if not bool(loot_result.get("ok", false)):
+			push_error(
+				"Could not spawn loot for mob %s: %s"
+				% [target_mob_id, str(loot_result.get("error", "Unknown error."))],
+			)
 	result["accepted"] = true
 	result["health"] = updated_target_state["health"]
 	result["max_health"] = updated_target_state["max_health"]
 	return result
+
+
+func pickup_loot(peer_id: int, drop_id: int) -> Dictionary:
+	if not _peer_zones.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"item_id": "",
+		}
+	var zone: RefCounted = _zones[_peer_zones[peer_id]]
+	return zone.pickup_loot(peer_id, drop_id)
 
 
 func advance(delta: float) -> bool:

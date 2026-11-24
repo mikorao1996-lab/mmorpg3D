@@ -38,6 +38,8 @@ var heavy_strike_cast_sent: bool = false
 var heavy_strike_cast_accepted: bool = false
 var out_of_range_cast_sent: bool = false
 var out_of_range_rejected: bool = false
+var loot_pickup_sent: bool = false
+var loot_pickup_rejected: bool = false
 var valid_player_id: int = 0
 var second_player_id: int = 0
 var initial_local_position: Vector3 = Vector3.ZERO
@@ -71,6 +73,7 @@ func _ready() -> void:
 	listener.movement_intent.connect(_on_movement_intent)
 	listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
 	listener.ability_cast_requested.connect(_on_ability_cast_requested)
+	listener.loot_pickup_requested.connect(_on_loot_pickup_requested)
 
 	valid_client = ClientNet.new()
 	add_child(valid_client)
@@ -79,6 +82,7 @@ func _ready() -> void:
 	valid_client.ability_cast_completed.connect(_on_primary_ability_cast_completed)
 	valid_client.ability_cast_completed.connect(_on_cooldown_cast_completed)
 	valid_client.ability_cast_completed.connect(_on_heavy_strike_cast_completed)
+	valid_client.loot_pickup_completed.connect(_on_loot_pickup_completed)
 	var valid_error: Error = valid_client.connect_to_server("127.0.0.1", 7790)
 	if valid_error != OK:
 		push_error("Failed to connect primary integration client: %s" % valid_error)
@@ -123,6 +127,14 @@ func _process(delta: float) -> void:
 			get_tree().quit(1)
 			return
 		movement_sent = true
+
+	if valid_accepted and not loot_pickup_sent:
+		var loot_error: Error = valid_client.request_loot_pickup(1)
+		if loot_error != OK:
+			push_error("Failed to send loopback loot pickup: %s" % loot_error)
+			get_tree().quit(1)
+			return
+		loot_pickup_sent = true
 
 	if second_valid_accepted and not second_movement_sent:
 		var second_movement_error: Error = second_valid_client.send_movement_intent(
@@ -223,6 +235,7 @@ func _process(delta: float) -> void:
 		and cooldown_rejected
 		and heavy_strike_cast_accepted
 		and out_of_range_rejected
+		and loot_pickup_rejected
 		and primary_isolated_in_starter
 		and second_isolated_in_dungeon
 	):
@@ -419,6 +432,14 @@ func _on_zone_transfer_requested(peer_id: int, zone_id: String) -> void:
 func _on_ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: String) -> void:
 	var result: Dictionary = server_world.cast_ability(peer_id, ability_id, target_mob_id)
 	listener.send_ability_cast_result(peer_id, result)
+
+
+func _on_loot_pickup_requested(peer_id: int, drop_id: int) -> void:
+	listener.send_loot_pickup_result(peer_id, server_world.pickup_loot(peer_id, drop_id))
+
+
+func _on_loot_pickup_completed(accepted: bool, reason: String, _item_id: String) -> void:
+	loot_pickup_rejected = not accepted and reason == "drop_not_found"
 
 
 func _on_primary_ability_cast_completed(

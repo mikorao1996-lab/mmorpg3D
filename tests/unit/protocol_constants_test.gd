@@ -4,8 +4,14 @@ const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_
 
 
 func run() -> bool:
-	if ProtocolConstantsType.PROTOCOL_VERSION != 3:
+	if ProtocolConstantsType.PROTOCOL_VERSION != 4:
 		push_error("Unexpected protocol version")
+		return false
+	if (
+		ProtocolConstantsType.OPCODE_LOOT_PICKUP
+		== ProtocolConstantsType.OPCODE_LOOT_PICKUP_RESULT
+	):
+		push_error("Loot request and result opcodes must differ")
 		return false
 	if ProtocolConstantsType.MAX_PACKET_SIZE_BYTES <= 0:
 		push_error("Packet size limit must be positive")

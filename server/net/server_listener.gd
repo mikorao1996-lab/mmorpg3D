@@ -6,6 +6,7 @@ signal player_disconnected(peer_id: int)
 signal movement_intent(peer_id: int, input_direction: Vector2)
 signal zone_transfer_requested(peer_id: int, zone_id: String)
 signal ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: String)
+signal loot_pickup_requested(peer_id: int, drop_id: int)
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
@@ -84,6 +85,8 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 		handle_zone_transfer(session, peer_id, payload)
 	elif opcode == ProtocolConstantsType.OPCODE_ABILITY_CAST:
 		handle_ability_cast(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_LOOT_PICKUP:
+		handle_loot_pickup(session, peer_id, payload)
 	else:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
@@ -146,6 +149,17 @@ func handle_ability_cast(session: RefCounted, peer_id: int, payload: Dictionary)
 	ability_cast_requested.emit(peer_id, ability_id_value, target_mob_id_value)
 
 
+func handle_loot_pickup(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("Loot pickup before authentication from peer %d" % peer_id)
+		return
+	var drop_id_value: Variant = payload.get("drop_id", null)
+	if drop_id_value is not int or drop_id_value < 1:
+		push_warning("Rejected malformed loot pickup from peer %d" % peer_id)
+		return
+	loot_pickup_requested.emit(peer_id, drop_id_value)
+
+
 func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
 	for peer_id: int in sessions:
 		var session: RefCounted = sessions[peer_id]
@@ -202,6 +216,22 @@ func send_ability_cast_result(peer_id: int, result: Dictionary) -> void:
 	)
 	if send_error != OK:
 		push_warning("Failed to send ability cast result to peer %d: %s" % [peer_id, send_error])
+
+
+func send_loot_pickup_result(peer_id: int, result: Dictionary) -> void:
+	if not sessions.has(peer_id):
+		push_warning("Cannot send loot pickup result to missing peer %d" % peer_id)
+		return
+	var session: RefCounted = sessions[peer_id]
+	if not session.authenticated:
+		push_warning("Cannot send loot pickup result to unauthenticated peer %d" % peer_id)
+		return
+	var send_error: Error = session.send(
+		ProtocolConstantsType.OPCODE_LOOT_PICKUP_RESULT,
+		result,
+	)
+	if send_error != OK:
+		push_warning("Failed to send loot pickup result to peer %d: %s" % [peer_id, send_error])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

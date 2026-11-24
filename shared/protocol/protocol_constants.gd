@@ -1,7 +1,7 @@
 class_name ProtocolConstants
 extends RefCounted
 
-const PROTOCOL_VERSION: int = 3
+const PROTOCOL_VERSION: int = 4
 const SNAPSHOT_CHANNEL: int = 0
 const EVENT_CHANNEL: int = 1
 const ENET_USER_CHANNEL_OFFSET: int = 1
@@ -22,6 +22,8 @@ const OPCODE_ZONE_TRANSFER: int = 8
 const OPCODE_ZONE_TRANSFER_RESULT: int = 9
 const OPCODE_ABILITY_CAST: int = 10
 const OPCODE_ABILITY_CAST_RESULT: int = 11
+const OPCODE_LOOT_PICKUP: int = 12
+const OPCODE_LOOT_PICKUP_RESULT: int = 13
 
 
 static func to_transport_channel(protocol_channel: int) -> int:

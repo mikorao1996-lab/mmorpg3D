@@ -22,11 +22,15 @@ var _player_views: Dictionary = {}
 var _player_health_states: Dictionary = {}
 var _mob_states: Dictionary = {}
 var _mob_views: Dictionary = {}
+var _drop_states: Dictionary = {}
+var _drop_views: Dictionary = {}
+var _inventory_state: Array[Dictionary] = []
 var _slash_key_down: bool = false
 var _heavy_strike_key_down: bool = false
 var _guard_break_key_down: bool = false
 var _whirlwind_key_down: bool = false
 var _second_wind_key_down: bool = false
+var _loot_key_down: bool = false
 var _combat_message_time_remaining: float = 0.0
 
 
@@ -49,6 +53,7 @@ func _ready() -> void:
 	_client_net.disconnected.connect(_on_disconnected)
 	_client_net.world_snapshot.connect(_on_world_snapshot)
 	_client_net.ability_cast_completed.connect(_on_ability_cast_completed)
+	_client_net.loot_pickup_completed.connect(_on_loot_pickup_completed)
 
 	var error: Error = _client_net.connect_to_server("127.0.0.1")
 	if error != OK:
@@ -114,6 +119,10 @@ func _physics_process(delta: float) -> void:
 	if not player_is_defeated and second_wind_key_pressed and not _second_wind_key_down:
 		_request_attack("second_wind")
 	_second_wind_key_down = second_wind_key_pressed
+	var loot_key_pressed: bool = Input.is_key_pressed(KEY_F)
+	if not player_is_defeated and loot_key_pressed and not _loot_key_down:
+		_request_nearest_loot()
+	_loot_key_down = loot_key_pressed
 
 
 func _process(_delta: float) -> void:
@@ -177,6 +186,18 @@ func _on_ability_cast_completed(
 	_combat_message_time_remaining = 2.0
 
 
+func _on_loot_pickup_completed(accepted: bool, reason: String, item_id: String) -> void:
+	if accepted:
+		var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
+		if item_definition.is_empty():
+			push_error("Loot pickup result referenced unknown item %s" % item_id)
+			return
+		status_label.text = tr("loot_pickup_success") % tr(item_definition["name_key"])
+	else:
+		status_label.text = tr("loot_pickup_failed") % tr("loot_reason_" + reason)
+	_combat_message_time_remaining = 2.0
+
+
 func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var player_entries: Variant = snapshot.get("players", null)
 	if not player_entries is Array:
@@ -185,6 +206,17 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var mob_entries: Variant = snapshot.get("mobs", null)
 	if not mob_entries is Array:
 		push_warning("Rejected world snapshot without mob list")
+		return
+	var drop_entries: Variant = snapshot.get("drops", null)
+	if not drop_entries is Array:
+		push_warning("Rejected world snapshot without loot drops")
+		return
+	var inventory_entries: Variant = snapshot.get("inventory", null)
+	if (
+		not inventory_entries is Array
+		or inventory_entries.size() > int(_simulation_config["inventory_slot_count"])
+	):
+		push_warning("Rejected malformed inventory in world snapshot")
 		return
 
 	var positions: Dictionary = {}
@@ -276,12 +308,58 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		}
 		_ensure_mob_view(mob_id)
 
+	var new_drop_states: Dictionary = {}
+	for entry: Variant in drop_entries:
+		if not entry is Array or entry.size() != 3:
+			push_warning("Rejected malformed loot drop in world snapshot")
+			return
+		var drop_id: Variant = entry[0]
+		var item_id: Variant = entry[1]
+		var drop_position: Variant = entry[2]
+		if (
+			drop_id is not int
+			or drop_id < 1
+			or item_id is not String
+			or drop_position is not Vector3
+			or not _game_data_registry["items"].has(item_id)
+			or new_drop_states.has(drop_id)
+		):
+			push_warning("Rejected malformed loot drop state")
+			return
+		new_drop_states[drop_id] = {
+			"item_id": item_id,
+			"position": drop_position,
+		}
+
+	var inventory_state: Array[Dictionary] = []
+	for entry: Variant in inventory_entries:
+		if not entry is Array or entry.size() != 2:
+			push_warning("Rejected malformed inventory slot")
+			return
+		var item_id: Variant = entry[0]
+		var quantity: Variant = entry[1]
+		if (
+			item_id is not String
+			or quantity is not int
+			or quantity < 1
+			or not _game_data_registry["items"].has(item_id)
+			or quantity > int(_game_data_registry["items"][item_id]["stack_limit"])
+		):
+			push_warning("Rejected malformed inventory item")
+			return
+		inventory_state.append({
+			"item_id": item_id,
+			"quantity": quantity,
+		})
+
 	var snapshot_record: Dictionary = {
 		"received_at_ms": Time.get_ticks_msec(),
 		"positions": positions,
 	}
 	_player_health_states = player_health_states
 	_mob_states = new_mob_states
+	_drop_states = new_drop_states
+	_inventory_state = inventory_state
 	var existing_mob_ids: Array = _mob_views.keys()
 	for mob_id: String in existing_mob_ids:
 		if not _mob_states.has(mob_id):
@@ -292,6 +370,19 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 			var mob_view: Node3D = _mob_views[mob_id]
 			mob_view.position = _mob_states[mob_id]["position"]
 			mob_view.visible = float(_mob_states[mob_id]["health"]) > 0.0
+	var existing_drop_ids: Array = _drop_views.keys()
+	for drop_id: int in existing_drop_ids:
+		if not _drop_states.has(drop_id):
+			var drop_view: MeshInstance3D = _drop_views[drop_id]
+			drop_view.queue_free()
+			_drop_views.erase(drop_id)
+	for drop_id: int in _drop_states:
+		_ensure_loot_view(drop_id)
+		var drop_view: MeshInstance3D = _drop_views[drop_id]
+		drop_view.position = (
+			_drop_states[drop_id]["position"]
+			+ Vector3(0.0, float(_simulation_config["loot_visual_radius"]), 0.0)
+		)
 	_update_combat_status()
 	_snapshot_buffer.append(snapshot_record)
 	var capacity: int = int(_simulation_config["snapshot_buffer_capacity"])
@@ -406,6 +497,22 @@ func _ensure_mob_view(mob_id: String) -> void:
 	_mob_views[mob_id] = mob_view
 
 
+func _ensure_loot_view(drop_id: int) -> void:
+	if _drop_views.has(drop_id):
+		return
+	var loot_view: MeshInstance3D = MeshInstance3D.new()
+	loot_view.name = "Loot_%d" % drop_id
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = float(_simulation_config["loot_visual_radius"])
+	sphere.height = sphere.radius * 2.0
+	loot_view.mesh = sphere
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(1.0, 0.78, 0.2)
+	loot_view.material_override = material
+	add_child(loot_view)
+	_drop_views[drop_id] = loot_view
+
+
 func _update_combat_status() -> void:
 	if (
 		_combat_message_time_remaining > 0.0
@@ -416,7 +523,16 @@ func _update_combat_status() -> void:
 	var mob_id: String = _mob_states.keys()[0]
 	var mob_definition: Dictionary = _game_data_registry["mobs"][mob_id]
 	var player_state: Dictionary = _player_health_states[_local_player_id]
-	status_label.text = tr("combat_status") % [
+	var inventory_names: PackedStringArray = []
+	for slot: Dictionary in _inventory_state:
+		var item_definition: Dictionary = _game_data_registry["items"][slot["item_id"]]
+		inventory_names.append(
+			"%s x%d" % [tr(item_definition["name_key"]), int(slot["quantity"])],
+		)
+	var inventory_summary: String = tr("inventory_empty")
+	if not inventory_names.is_empty():
+		inventory_summary = ", ".join(inventory_names)
+	var combat_summary: String = tr("combat_status") % [
 		int(player_state["level"]),
 		int(player_state["experience"]),
 		int(player_state["health"]),
@@ -427,6 +543,37 @@ func _update_combat_status() -> void:
 		int(_mob_states[mob_id]["health"]),
 		int(_mob_states[mob_id]["max_health"]),
 	]
+	var inventory_line: String = tr("inventory_status") % [
+		_inventory_state.size(),
+		int(_simulation_config["inventory_slot_count"]),
+		inventory_summary,
+	]
+	status_label.text = combat_summary + "\n" + inventory_line
+
+
+func _request_nearest_loot() -> void:
+	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
+	if local_view == null:
+		return
+	var pickup_range_squared: float = (
+		float(_simulation_config["loot_pickup_range"])
+		* float(_simulation_config["loot_pickup_range"])
+	)
+	var nearest_drop_id: int = 0
+	var nearest_distance_squared: float = pickup_range_squared
+	for drop_id: int in _drop_states:
+		var drop_position: Vector3 = _drop_states[drop_id]["position"]
+		var distance_squared: float = local_view.global_position.distance_squared_to(drop_position)
+		if distance_squared <= nearest_distance_squared:
+			nearest_drop_id = drop_id
+			nearest_distance_squared = distance_squared
+	if nearest_drop_id == 0:
+		status_label.text = tr("loot_no_nearby")
+		_combat_message_time_remaining = 1.0
+		return
+	var error: Error = _client_net.request_loot_pickup(nearest_drop_id)
+	if error != OK:
+		push_warning("Could not request loot pickup: %s" % error)
 
 
 func _request_attack(ability_id: String) -> void:

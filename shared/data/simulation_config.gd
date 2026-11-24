@@ -15,6 +15,9 @@ const REQUIRED_NUMBER_KEYS: PackedStringArray = [
 	"interpolation_buffer_seconds",
 	"snapshot_buffer_capacity",
 	"local_reconciliation_factor",
+	"inventory_slot_count",
+	"loot_pickup_range",
+	"loot_visual_radius",
 	"player_visual_radius",
 	"player_visual_height",
 	"camera_height",
@@ -74,5 +77,12 @@ static func load_config() -> Dictionary:
 		return {}
 	if int(config["snapshot_buffer_capacity"]) < 2:
 		push_error("snapshot_buffer_capacity must be at least 2")
+		return {}
+	var inventory_slot_count: Variant = config["inventory_slot_count"]
+	if (
+		(typeof(inventory_slot_count) != TYPE_INT and typeof(inventory_slot_count) != TYPE_FLOAT)
+		or float(inventory_slot_count) != floor(float(inventory_slot_count))
+	):
+		push_error("inventory_slot_count must be a positive integer")
 		return {}
 	return config

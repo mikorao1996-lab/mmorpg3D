@@ -2,6 +2,7 @@ class_name ServerZone
 extends RefCounted
 
 const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simulation.gd")
+const InventoryComponentType: GDScript = preload("res://server/systems/inventory_component.gd")
 
 var zone_id: String
 var _movement_speed: float
@@ -12,13 +13,18 @@ var _interest_radius: float
 var _spawn_spacing: float
 var _simulation_step_seconds: float
 var _snapshot_interval_seconds: float
+var _inventory_slot_count: int
+var _loot_pickup_range: float
 var _players: Dictionary = {}
 var _simulation_accumulator: float = 0.0
 var _snapshot_accumulator: float = 0.0
 var _next_spawn_index: int = 0
 var _mob_definitions: Dictionary = {}
+var _item_definitions: Dictionary = {}
 var _progression_definitions: Dictionary = {}
 var _mobs: Dictionary = {}
+var _drops: Dictionary = {}
+var _next_drop_id: int = 1
 
 
 func _init(
@@ -35,7 +41,10 @@ func _init(
 	_spawn_spacing = float(config["spawn_spacing"])
 	_simulation_step_seconds = float(config["simulation_step_seconds"])
 	_snapshot_interval_seconds = float(config["snapshot_interval_seconds"])
+	_inventory_slot_count = int(config["inventory_slot_count"])
+	_loot_pickup_range = float(config["loot_pickup_range"])
 	_mob_definitions = game_data_registry["mobs"]
+	_item_definitions = game_data_registry["items"]
 	_progression_definitions = game_data_registry["progression"]
 	for mob_id: String in _mob_definitions:
 		var definition: Dictionary = _mob_definitions[mob_id]
@@ -54,6 +63,7 @@ func _init(
 			"health": float(definition["health"]),
 			"respawn_remaining_seconds": 0.0,
 			"attack_remaining_seconds": 0.0,
+			"loot_spawned": false,
 		}
 
 
@@ -81,6 +91,8 @@ func add_player_with_state(peer_id: int, player_state: Dictionary) -> void:
 
 
 func remove_player(peer_id: int) -> void:
+	if not _players.has(peer_id):
+		return
 	_players.erase(peer_id)
 
 
@@ -191,7 +203,81 @@ func damage_mob(mob_id: String, damage: float) -> bool:
 	mob_state["health"] = maxf(0.0, float(mob_state["health"]) - effective_damage)
 	if float(mob_state["health"]) == 0.0:
 		mob_state["respawn_remaining_seconds"] = float(definition["respawn_seconds"])
+		mob_state["loot_spawned"] = false
 	return true
+
+
+func spawn_loot_for_mob(mob_id: String) -> Dictionary:
+	if not _mobs.has(mob_id):
+		return {"ok": false, "error": "Mob is not present in this zone."}
+	if float(_mobs[mob_id]["health"]) > 0.0:
+		return {"ok": false, "error": "Loot can only be spawned for a defeated mob."}
+	if bool(_mobs[mob_id]["loot_spawned"]):
+		return {"ok": false, "error": "Loot has already spawned for this defeat."}
+
+	var mob_definition: Dictionary = _mob_definitions[mob_id]
+	var drop_ids: Array[int] = []
+	for item_id: String in mob_definition["loot_item_ids"]:
+		var drop_id: int = _next_drop_id
+		_next_drop_id += 1
+		_drops[drop_id] = {
+			"item_id": item_id,
+			"position": _mobs[mob_id]["position"],
+		}
+		drop_ids.append(drop_id)
+	_mobs[mob_id]["loot_spawned"] = true
+	return {"ok": true, "drop_ids": drop_ids}
+
+
+func pickup_loot(peer_id: int, drop_id: int) -> Dictionary:
+	var result: Dictionary = {
+		"accepted": false,
+		"reason": "",
+		"item_id": "",
+	}
+	if not _players.has(peer_id):
+		result["reason"] = "invalid_player"
+		return result
+	if not _drops.has(drop_id):
+		result["reason"] = "drop_not_found"
+		return result
+
+	var drop: Dictionary = _drops[drop_id]
+	var player_position: Vector3 = _players[peer_id]["position"]
+	var drop_position: Vector3 = drop["position"]
+	if (
+		player_position.distance_squared_to(drop_position)
+		> _loot_pickup_range * _loot_pickup_range
+	):
+		result["reason"] = "out_of_range"
+		result["item_id"] = drop["item_id"]
+		return result
+
+	var item_id: String = drop["item_id"]
+	if not _item_definitions.has(item_id):
+		push_error("Loot drop references unknown item %s" % item_id)
+		result["reason"] = "unknown_item"
+		return result
+	var player_state: Dictionary = _players[peer_id]
+	var inventory: RefCounted = player_state["inventory"]
+	var inventory_result: Variant = inventory.call(
+		"add_item",
+		item_id,
+		_item_definitions[item_id],
+	)
+	if typeof(inventory_result) != TYPE_DICTIONARY:
+		push_error("Inventory component returned a malformed result")
+		result["reason"] = "inventory_error"
+		return result
+	if not bool(inventory_result.get("ok", false)):
+		result["reason"] = str(inventory_result.get("reason", "inventory_error"))
+		result["item_id"] = item_id
+		return result
+
+	_drops.erase(drop_id)
+	result["accepted"] = true
+	result["item_id"] = item_id
+	return result
 
 
 func set_input_direction(peer_id: int, input_direction: Vector2) -> bool:
@@ -363,11 +449,29 @@ func _create_snapshot_for(observer_id: int) -> Dictionary:
 			mob_state["health"],
 			float(mob_definition["health"]),
 		])
+	var drop_ids: Array = _drops.keys()
+	drop_ids.sort()
+	var drop_states: Array = []
+	for drop_id: int in drop_ids:
+		var drop: Dictionary = _drops[drop_id]
+		if (
+			observer_position.distance_squared_to(drop["position"])
+			> interest_radius_squared
+		):
+			continue
+		drop_states.append([
+			drop_id,
+			drop["item_id"],
+			drop["position"],
+		])
+	var inventory: RefCounted = observer_state["inventory"]
 	return {
 		"zone_id": zone_id,
 		"server_time_ms": Time.get_ticks_msec(),
 		"players": player_states,
 		"mobs": mob_states,
+		"drops": drop_states,
+		"inventory": inventory.call("get_snapshot"),
 	}
 
 
@@ -386,6 +490,7 @@ func _create_player_state(position: Vector3) -> Dictionary:
 		"attack_multiplier": float(initial_definition["attack_multiplier"]),
 		"defense": float(initial_definition["defense"]),
 		"respawn_remaining_seconds": 0.0,
+		"inventory": InventoryComponentType.new(_inventory_slot_count),
 	}
 
 
