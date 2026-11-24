@@ -44,7 +44,10 @@ Then launch the project twice (for example, in two terminals):
 godot --path D:\Dev\mmorpg3D
 ```
 
-Both clients connect to `127.0.0.1:7788`. Use **WASD** to move; each client
+Both clients connect to `127.0.0.1:7788`. The address and port come from
+`resources/data/simulation.json`; set `MMORPG3D_SERVER_ADDRESS` and
+`MMORPG3D_SERVER_PORT` to join a server on another machine without a rebuild.
+Use **WASD** to move; each client
 shows both players, predicts its own movement, and interpolates server snapshots.
 The server filters snapshots by the configured `interest_radius` (10 world units
 by default) and always includes the observing player. Close the server with
@@ -63,6 +66,14 @@ data; players have 100 health and respawn at their zone spawn after 3 seconds
 if defeated. After a zone transfer, the entry position becomes that zone's
 respawn point.
 
+The inventory panel on the right shows the six equipment slots, the carried
+items, their level requirements, and their stat bonuses. **Equip** sends an
+`EQUIP_ITEM` request, clicking a filled gear slot sends `UNEQUIP_ITEM`, and
+**Use** on a consumable sends `USE_ITEM`. The server decides whether the
+request is accepted; the panel only renders the authoritative snapshot, so an
+item above the character level stays locked and a potion is never wasted while
+health is full.
+
 The simulation config defines in-memory zones `starter` and `dungeon`; clients
 start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
 is available for server-validated transfers, but there is not yet a portal or
@@ -70,7 +81,10 @@ zone-selection UI.
 
 The server loads the versioned item, ability, mob, and quest JSON registries
 before listening. Their initial schema and cross-reference rules are described
-in [docs/data_registries.md](./docs/data_registries.md).
+in [docs/data_registries.md](./docs/data_registries.md). The item catalog holds
+18 items: three weapons, armor for all six slots, three consumables, and two
+quest items. Every equipment slot has at least one item that can be obtained
+from mob loot or a quest reward.
 
 ## Unit checks
 
@@ -92,7 +106,13 @@ players in world snapshots, server-side movement, a successful transfer between
 zones with isolated snapshots, and an explicit rejection for an unknown zone.
 It also verifies a server-authoritative hit, cooldown enforcement, and range
 rejection, plus independent execution of the heavy strike while slash is on
-cooldown.
+cooldown, an equipment request for an item the player does not own, and two
+item-use rejections (a non-consumable and an item that is not carried).
+
+The second integration scene loads the production client scene against an
+in-process server and verifies that a snapshot reaches the inventory panel:
+six gear slots, the granted loot stacks, and a consumable use request that the
+server rejects while the player is at full health.
 
 ## PostgreSQL driver spike
 

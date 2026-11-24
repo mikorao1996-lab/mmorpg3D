@@ -2,7 +2,7 @@
 
 ## Bootstrap protocol constants
 
-- Protocol version: `5`
+- Protocol version: `6`
 - Snapshot channel: `0`, unreliable.
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
@@ -42,6 +42,8 @@ Opcodes:
 - `14`: `EQUIP_ITEM`
 - `15`: `UNEQUIP_ITEM`
 - `16`: `EQUIPMENT_RESULT`
+- `17`: `USE_ITEM`
+- `18`: `ITEM_USE_RESULT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 
@@ -96,3 +98,19 @@ ability, target, range, cooldown, and living target state before applying
 configured damage. `ABILITY_CAST_RESULT` reliably contains `accepted`, `reason`,
 `mob_id`, `health`, and `max_health`. Mob health and respawns are authoritative
 and replicated through subsequent snapshots.
+
+`USE_ITEM` requests contain an `item_id`. Only authenticated peers can request
+item use. The server resolves the item in the item registry, requires it to be
+a `consumable`, and requires the player to own a unit of it. The effect comes
+from the item definition: `stats.health` heals the player and `stats.resource`
+restores the player resource, capped by the current maximum values. The item is
+consumed only when the effect applies, so a potion is never wasted while the
+player is at full health. `ITEM_USE_RESULT` reliably contains `accepted`,
+`reason`, `item_id`, `health`, `max_health`, `resource`, and `max_resource`.
+Rejection reasons are `invalid_player`, `player_dead`, `unknown_item`,
+`not_consumable`, `item_not_in_inventory`, `no_effect`, `no_effect_needed`,
+`health_full`, `resource_full`, and `inventory_error`.
+
+The client resolves the server address and port from `resources/data/simulation.json`.
+`MMORPG3D_SERVER_ADDRESS` and `MMORPG3D_SERVER_PORT` override those values so a
+client can join a server on another machine without a rebuild.

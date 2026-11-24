@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dau1oo253n2tp"]
 
 [ext_resource type="Script" uid="uid://sktydkhb68lh" path="res://client/scripts/main.gd" id="1"]
+[ext_resource type="Script" path="res://client/scripts/inventory_panel.gd" id="2"]
 
 [sub_resource type="Environment" id="Environment_bootstrap"]
 background_mode = 1
@@ -51,3 +52,16 @@ offset_top = 20.0
 offset_right = 760.0
 offset_bottom = 48.0
 text = "controls_hint"
+
+[node name="InventoryCanvas" type="CanvasLayer" parent="."]
+
+[node name="InventoryPanel" type="PanelContainer" parent="InventoryCanvas"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -384.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 620.0
+grow_horizontal = 0
+script = ExtResource("2")

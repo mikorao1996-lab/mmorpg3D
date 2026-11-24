@@ -9,9 +9,12 @@ const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_regi
 @onready var status_label: Label = $StatusCanvas/StatusPanel/StatusLabel
 @onready var hint_label: Label = $StatusCanvas/HintLabel
 @onready var camera: Camera3D = $Camera3D
+@onready var inventory_panel: PanelContainer = $InventoryCanvas/InventoryPanel
 
 var _simulation_config: Dictionary = {}
 var _game_data_registry: Dictionary = {}
+var _server_address: String = ProtocolConstantsType.DEFAULT_SERVER_ADDRESS
+var _server_port: int = ProtocolConstantsType.SERVER_PORT
 var _client_net: ClientNet
 var _local_player_id: int = 0
 var _predicted_position: Vector3 = Vector3.ZERO
@@ -32,8 +35,6 @@ var _guard_break_key_down: bool = false
 var _whirlwind_key_down: bool = false
 var _second_wind_key_down: bool = false
 var _loot_key_down: bool = false
-var _equip_key_down: bool = false
-var _unequip_key_down: bool = false
 var _combat_message_time_remaining: float = 0.0
 
 
@@ -46,9 +47,18 @@ func _ready() -> void:
 	if _game_data_registry.is_empty():
 		status_label.text = tr("game_data_error")
 		return
+	_server_address = _resolve_server_address()
+	_server_port = _resolve_server_port()
 
 	hint_label.text = tr("controls_hint")
-	status_label.text = tr("connection_connecting")
+	status_label.text = tr("connection_connecting") % [
+		_server_address,
+		_server_port,
+	]
+	inventory_panel.setup(_game_data_registry["items"])
+	inventory_panel.equip_requested.connect(_on_equip_requested)
+	inventory_panel.unequip_requested.connect(_on_unequip_requested)
+	inventory_panel.use_item_requested.connect(_on_use_item_requested)
 	_client_net = ClientNet.new()
 	add_child(_client_net)
 	_client_net.hello_accepted.connect(_on_hello_accepted)
@@ -58,11 +68,41 @@ func _ready() -> void:
 	_client_net.ability_cast_completed.connect(_on_ability_cast_completed)
 	_client_net.loot_pickup_completed.connect(_on_loot_pickup_completed)
 	_client_net.equipment_action_completed.connect(_on_equipment_action_completed)
+	_client_net.item_use_completed.connect(_on_item_use_completed)
 
-	var error: Error = _client_net.connect_to_server("127.0.0.1")
+	var error: Error = _client_net.connect_to_server(_server_address, _server_port)
 	if error != OK:
 		status_label.text = tr("connection_failed")
 		push_error("Could not start ENet client: %s" % error)
+
+
+## Resolves the server address from the simulation config, with an environment
+## override so a client can join a server on another machine.
+func _resolve_server_address() -> String:
+	var configured_address: String = str(
+		_simulation_config.get(
+			"server_address",
+			ProtocolConstantsType.DEFAULT_SERVER_ADDRESS,
+		)
+	)
+	var environment_address: String = OS.get_environment("MMORPG3D_SERVER_ADDRESS")
+	if not environment_address.strip_edges().is_empty():
+		return environment_address.strip_edges()
+	return configured_address
+
+
+## Resolves the server port from the simulation config, with an environment
+## override for non-default deployments.
+func _resolve_server_port() -> int:
+	var configured_port: int = int(
+		_simulation_config.get("server_port", ProtocolConstantsType.SERVER_PORT)
+	)
+	var environment_port: String = OS.get_environment("MMORPG3D_SERVER_PORT")
+	if environment_port.strip_edges().is_valid_int():
+		var parsed_port: int = environment_port.strip_edges().to_int()
+		if parsed_port > 0 and parsed_port <= 65535:
+			return parsed_port
+	return configured_port
 
 
 func _physics_process(delta: float) -> void:
@@ -127,14 +167,6 @@ func _physics_process(delta: float) -> void:
 	if not player_is_defeated and loot_key_pressed and not _loot_key_down:
 		_request_nearest_loot()
 	_loot_key_down = loot_key_pressed
-	var equip_key_pressed: bool = Input.is_key_pressed(KEY_G)
-	if not player_is_defeated and equip_key_pressed and not _equip_key_down:
-		_request_equip_first_item()
-	_equip_key_down = equip_key_pressed
-	var unequip_key_pressed: bool = Input.is_key_pressed(KEY_H)
-	if not player_is_defeated and unequip_key_pressed and not _unequip_key_down:
-		_request_unequip_first_item()
-	_unequip_key_down = unequip_key_pressed
 
 
 func _process(_delta: float) -> void:
@@ -440,6 +472,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 			+ Vector3(0.0, float(_simulation_config["loot_visual_radius"]), 0.0)
 		)
 	_update_combat_status()
+	_update_inventory_panel()
 	_snapshot_buffer.append(snapshot_record)
 	var capacity: int = int(_simulation_config["snapshot_buffer_capacity"])
 	while _snapshot_buffer.size() > capacity:
@@ -573,6 +606,12 @@ func _ensure_loot_view(drop_id: int) -> void:
 	_drop_views[drop_id] = loot_view
 
 
+func _update_inventory_panel() -> void:
+	var local_state: Dictionary = _player_health_states.get(_local_player_id, {})
+	var local_level: int = int(local_state.get("level", 1))
+	inventory_panel.update_view(_inventory_state, _equipment_state, local_level)
+
+
 func _update_combat_status() -> void:
 	if (
 		_combat_message_time_remaining > 0.0
@@ -627,29 +666,45 @@ func _update_combat_status() -> void:
 	status_label.text = combat_summary + "\n" + inventory_line + "\n" + equipment_line
 
 
-func _request_equip_first_item() -> void:
-	for slot: Dictionary in _inventory_state:
-		var item_definition: Dictionary = _game_data_registry["items"][slot["item_id"]]
-		if not item_definition.has("equipment_slot"):
-			continue
-		var error: Error = _client_net.request_equip_item(slot["item_id"])
-		if error != OK:
-			push_warning("Could not request item equip: %s" % error)
-		return
-	status_label.text = tr("equipment_no_item")
-	_combat_message_time_remaining = 1.0
+func _on_equip_requested(item_id: String) -> void:
+	var error: Error = _client_net.request_equip_item(item_id)
+	if error != OK:
+		push_warning("Could not request item equip: %s" % error)
 
 
-func _request_unequip_first_item() -> void:
-	for slot_id: String in GameDataRegistryType.EQUIPMENT_SLOTS:
-		if str(_equipment_state.get(slot_id, "")).is_empty():
-			continue
-		var error: Error = _client_net.request_unequip_item(slot_id)
-		if error != OK:
-			push_warning("Could not request item unequip: %s" % error)
-		return
-	status_label.text = tr("equipment_nothing_equipped")
-	_combat_message_time_remaining = 1.0
+func _on_unequip_requested(slot_id: String) -> void:
+	var error: Error = _client_net.request_unequip_item(slot_id)
+	if error != OK:
+		push_warning("Could not request item unequip: %s" % error)
+
+
+func _on_use_item_requested(item_id: String) -> void:
+	var error: Error = _client_net.request_use_item(item_id)
+	if error != OK:
+		push_warning("Could not request item use: %s" % error)
+
+
+func _on_item_use_completed(
+	accepted: bool,
+	reason: String,
+	item_id: String,
+	health: float,
+	max_health: float,
+	resource: float,
+	max_resource: float,
+) -> void:
+	if accepted:
+		var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
+		status_label.text = tr("item_use_success") % [
+			tr(item_definition.get("name_key", item_id)),
+			int(health),
+			int(max_health),
+			int(resource),
+			int(max_resource),
+		]
+	else:
+		status_label.text = tr("item_use_failed") % tr("item_use_reason_" + reason)
+	_combat_message_time_remaining = 2.0
 
 
 func _request_nearest_loot() -> void:

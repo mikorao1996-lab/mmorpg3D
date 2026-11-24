@@ -14,6 +14,158 @@
       }
     },
     {
+      "id": "iron_sword",
+      "name_key": "item_iron_sword",
+      "item_type": "weapon",
+      "equipment_slot": "weapon",
+      "stack_limit": 1,
+      "level_requirement": 4,
+      "sell_price": 18,
+      "stats": {
+        "attack": 5
+      }
+    },
+    {
+      "id": "battle_axe",
+      "name_key": "item_battle_axe",
+      "item_type": "weapon",
+      "equipment_slot": "weapon",
+      "stack_limit": 1,
+      "level_requirement": 7,
+      "sell_price": 40,
+      "stats": {
+        "attack": 9
+      }
+    },
+    {
+      "id": "leather_hood",
+      "name_key": "item_leather_hood",
+      "item_type": "armor",
+      "equipment_slot": "head",
+      "stack_limit": 1,
+      "level_requirement": 1,
+      "sell_price": 6,
+      "stats": {
+        "defense": 1,
+        "health": 5
+      }
+    },
+    {
+      "id": "iron_helm",
+      "name_key": "item_iron_helm",
+      "item_type": "armor",
+      "equipment_slot": "head",
+      "stack_limit": 1,
+      "level_requirement": 5,
+      "sell_price": 22,
+      "stats": {
+        "defense": 3,
+        "health": 10
+      }
+    },
+    {
+      "id": "padded_vest",
+      "name_key": "item_padded_vest",
+      "item_type": "armor",
+      "equipment_slot": "chest",
+      "stack_limit": 1,
+      "level_requirement": 2,
+      "sell_price": 9,
+      "stats": {
+        "defense": 2,
+        "health": 15
+      }
+    },
+    {
+      "id": "iron_chestplate",
+      "name_key": "item_iron_chestplate",
+      "item_type": "armor",
+      "equipment_slot": "chest",
+      "stack_limit": 1,
+      "level_requirement": 6,
+      "sell_price": 30,
+      "stats": {
+        "defense": 5,
+        "health": 30
+      }
+    },
+    {
+      "id": "cloth_wraps",
+      "name_key": "item_cloth_wraps",
+      "item_type": "armor",
+      "equipment_slot": "hands",
+      "stack_limit": 1,
+      "level_requirement": 1,
+      "sell_price": 5,
+      "stats": {
+        "defense": 1
+      }
+    },
+    {
+      "id": "iron_gauntlets",
+      "name_key": "item_iron_gauntlets",
+      "item_type": "armor",
+      "equipment_slot": "hands",
+      "stack_limit": 1,
+      "level_requirement": 4,
+      "sell_price": 18,
+      "stats": {
+        "defense": 3,
+        "health": 5
+      }
+    },
+    {
+      "id": "leather_greaves",
+      "name_key": "item_leather_greaves",
+      "item_type": "armor",
+      "equipment_slot": "legs",
+      "stack_limit": 1,
+      "level_requirement": 2,
+      "sell_price": 8,
+      "stats": {
+        "defense": 1,
+        "health": 8
+      }
+    },
+    {
+      "id": "iron_greaves",
+      "name_key": "item_iron_greaves",
+      "item_type": "armor",
+      "equipment_slot": "legs",
+      "stack_limit": 1,
+      "level_requirement": 7,
+      "sell_price": 26,
+      "stats": {
+        "defense": 4,
+        "health": 12
+      }
+    },
+    {
+      "id": "worn_boots",
+      "name_key": "item_worn_boots",
+      "item_type": "armor",
+      "equipment_slot": "feet",
+      "stack_limit": 1,
+      "level_requirement": 1,
+      "sell_price": 5,
+      "stats": {
+        "defense": 1
+      }
+    },
+    {
+      "id": "iron_boots",
+      "name_key": "item_iron_boots",
+      "item_type": "armor",
+      "equipment_slot": "feet",
+      "stack_limit": 1,
+      "level_requirement": 5,
+      "sell_price": 20,
+      "stats": {
+        "defense": 3,
+        "health": 8
+      }
+    },
+    {
       "id": "minor_potion",
       "name_key": "item_minor_potion",
       "item_type": "consumable",
@@ -23,6 +175,46 @@
       "stats": {
         "health": 25
       }
+    },
+    {
+      "id": "greater_potion",
+      "name_key": "item_greater_potion",
+      "item_type": "consumable",
+      "stack_limit": 10,
+      "level_requirement": 4,
+      "sell_price": 8,
+      "stats": {
+        "health": 60
+      }
+    },
+    {
+      "id": "stamina_tonic",
+      "name_key": "item_stamina_tonic",
+      "item_type": "consumable",
+      "stack_limit": 10,
+      "level_requirement": 3,
+      "sell_price": 6,
+      "stats": {
+        "resource": 40
+      }
+    },
+    {
+      "id": "slime_gel",
+      "name_key": "item_slime_gel",
+      "item_type": "quest",
+      "stack_limit": 20,
+      "level_requirement": 1,
+      "sell_price": 0,
+      "stats": {}
+    },
+    {
+      "id": "wolf_pelt",
+      "name_key": "item_wolf_pelt",
+      "item_type": "quest",
+      "stack_limit": 20,
+      "level_requirement": 2,
+      "sell_price": 0,
+      "stats": {}
     }
   ]
 }

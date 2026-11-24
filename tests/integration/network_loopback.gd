@@ -42,6 +42,9 @@ var loot_pickup_sent: bool = false
 var loot_pickup_rejected: bool = false
 var equip_request_sent: bool = false
 var equip_request_rejected: bool = false
+var item_use_sent: bool = false
+var item_use_not_consumable_rejected: bool = false
+var item_use_not_owned_rejected: bool = false
 var valid_player_id: int = 0
 var second_player_id: int = 0
 var initial_local_position: Vector3 = Vector3.ZERO
@@ -78,6 +81,7 @@ func _ready() -> void:
 	listener.loot_pickup_requested.connect(_on_loot_pickup_requested)
 	listener.equip_item_requested.connect(_on_equip_item_requested)
 	listener.unequip_item_requested.connect(_on_unequip_item_requested)
+	listener.use_item_requested.connect(_on_use_item_requested)
 
 	valid_client = ClientNet.new()
 	add_child(valid_client)
@@ -88,6 +92,7 @@ func _ready() -> void:
 	valid_client.ability_cast_completed.connect(_on_heavy_strike_cast_completed)
 	valid_client.loot_pickup_completed.connect(_on_loot_pickup_completed)
 	valid_client.equipment_action_completed.connect(_on_equipment_action_completed)
+	valid_client.item_use_completed.connect(_on_item_use_completed)
 	var valid_error: Error = valid_client.connect_to_server("127.0.0.1", 7790)
 	if valid_error != OK:
 		push_error("Failed to connect primary integration client: %s" % valid_error)
@@ -147,6 +152,19 @@ func _process(delta: float) -> void:
 			get_tree().quit(1)
 			return
 		equip_request_sent = true
+
+	if valid_accepted and not item_use_sent:
+		var item_use_error: Error = valid_client.request_use_item("starter_sword")
+		if item_use_error != OK:
+			push_error("Failed to send loopback item use request: %s" % item_use_error)
+			get_tree().quit(1)
+			return
+		var owned_item_use_error: Error = valid_client.request_use_item("minor_potion")
+		if owned_item_use_error != OK:
+			push_error("Failed to send loopback owned item use request: %s" % owned_item_use_error)
+			get_tree().quit(1)
+			return
+		item_use_sent = true
 
 	if second_valid_accepted and not second_movement_sent:
 		var second_movement_error: Error = second_valid_client.send_movement_intent(
@@ -249,6 +267,8 @@ func _process(delta: float) -> void:
 		and out_of_range_rejected
 		and loot_pickup_rejected
 		and equip_request_rejected
+		and item_use_not_consumable_rejected
+		and item_use_not_owned_rejected
 		and primary_isolated_in_starter
 		and second_isolated_in_dungeon
 	):
@@ -463,6 +483,10 @@ func _on_unequip_item_requested(peer_id: int, slot_id: String) -> void:
 	)
 
 
+func _on_use_item_requested(peer_id: int, item_id: String) -> void:
+	listener.send_item_use_result(peer_id, server_world.use_item(peer_id, item_id))
+
+
 func _on_loot_pickup_completed(accepted: bool, reason: String, _item_id: String) -> void:
 	loot_pickup_rejected = not accepted and reason == "drop_not_found"
 
@@ -479,6 +503,23 @@ func _on_equipment_action_completed(
 		and not accepted
 		and reason == "item_not_in_inventory"
 	)
+
+
+func _on_item_use_completed(
+	accepted: bool,
+	reason: String,
+	item_id: String,
+	_health: float,
+	_max_health: float,
+	_resource: float,
+	_max_resource: float,
+) -> void:
+	if accepted:
+		return
+	if reason == "not_consumable" and item_id == "starter_sword":
+		item_use_not_consumable_rejected = true
+	elif reason == "item_not_in_inventory" and item_id == "minor_potion":
+		item_use_not_owned_rejected = true
 
 
 func _on_primary_ability_cast_completed(

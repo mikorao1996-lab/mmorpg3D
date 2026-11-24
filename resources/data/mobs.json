@@ -19,7 +19,8 @@
       "visual_radius": 0.55,
       "visual_height": 1.1,
       "loot_item_ids": [
-        "minor_potion"
+        "minor_potion",
+        "slime_gel"
       ]
     },
     {
@@ -40,6 +41,8 @@
       "visual_radius": 0.45,
       "visual_height": 0.9,
       "loot_item_ids": [
+        "worn_boots",
+        "wolf_pelt",
         "minor_potion"
       ]
     },
@@ -61,7 +64,10 @@
       "visual_radius": 0.75,
       "visual_height": 1.8,
       "loot_item_ids": [
-        "starter_sword"
+        "padded_vest",
+        "iron_gauntlets",
+        "iron_sword",
+        "greater_potion"
       ]
     }
   ]

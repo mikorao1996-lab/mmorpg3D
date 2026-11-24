@@ -55,6 +55,14 @@ func remove_item(item_id: String) -> Dictionary:
 	return {"ok": false, "reason": "item_not_in_inventory"}
 
 
+## Reports whether at least one unit of the item is held.
+func has_item(item_id: String) -> bool:
+	for slot: Dictionary in _slots:
+		if slot["item_id"] == item_id:
+			return true
+	return false
+
+
 func get_snapshot() -> Array:
 	var snapshot: Array = []
 	for slot: Dictionary in _slots:

@@ -24,10 +24,14 @@ File: `resources/data/items.json`
 - Weapons require `equipment_slot: "weapon"`; armor requires one of `head`,
   `chest`, `hands`, `legs`, or `feet`. Consumables and quest items do not have
   an equipment slot. Weapons and armor have `stack_limit: 1`.
-- `stack_limit`, `level_requirement`: integers >= 1.
+- `stack_limit`: integer >= 1.
+- `level_requirement`: integer between `1` and the character level cap (`10`).
+  The server rejects an equip request below that level.
 - `sell_price`: integer >= 0.
 - `stats`: object with optional `attack`, `defense`, `health`, or `resource`
-  numeric values >= 0.
+  numeric values >= 0. For equipment these are passive bonuses; for
+  consumables they are the use effect (`health` heals, `resource` restores
+  the player resource) and at least one of them must be greater than zero.
 
 ## Abilities
 
@@ -54,7 +58,9 @@ File: `resources/data/mobs.json`
   The combat slice uses spawn/visual fields to initialize and render zone-local
   mobs, and the aggro/attack fields to drive server-authoritative mob AI.
   Configured loot items drop on defeat; bosses use the same server-authoritative
-  combat and loot rules with their own data-defined stats.
+  combat and loot rules with their own data-defined stats. The current catalog
+  spreads the six equipment slots over the mob loot tables and the quest
+  rewards so every slot has an obtainable item.
 
 ## Progression
 
@@ -81,6 +87,8 @@ File: `resources/data/quests.json`
 - `kill` objectives must reference a registered mob; `collect` objectives must
   reference a registered item. `talk` targets are non-empty NPC IDs; an NPC
   registry is not defined yet.
+- Quest definitions are data only so far: the runtime quest system, acceptance,
+  progress tracking, and one-time rewards are not implemented yet.
 
 `GameDataRegistry.load_all()` returns dictionaries keyed by entry ID under
 `items`, `abilities`, `mobs`, `progression`, and `quests`. These are initial

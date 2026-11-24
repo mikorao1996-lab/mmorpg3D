@@ -1,5 +1,7 @@
 {
   "zone_ids": ["starter", "dungeon"],
+  "server_address": "127.0.0.1",
+  "server_port": 7788,
   "simulation_step_seconds": 0.05,
   "movement_speed": 4.0,
   "player_respawn_seconds": 3.0,

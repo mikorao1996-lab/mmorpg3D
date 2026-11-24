@@ -9,6 +9,7 @@ signal ability_cast_requested(peer_id: int, ability_id: String, target_mob_id: S
 signal loot_pickup_requested(peer_id: int, drop_id: int)
 signal equip_item_requested(peer_id: int, item_id: String)
 signal unequip_item_requested(peer_id: int, slot_id: String)
+signal use_item_requested(peer_id: int, item_id: String)
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
@@ -93,6 +94,8 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 		handle_equip_item(session, peer_id, payload)
 	elif opcode == ProtocolConstantsType.OPCODE_UNEQUIP_ITEM:
 		handle_unequip_item(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_USE_ITEM:
+		handle_use_item(session, peer_id, payload)
 	else:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
@@ -186,6 +189,17 @@ func handle_unequip_item(session: RefCounted, peer_id: int, payload: Dictionary)
 		push_warning("Rejected malformed unequip request from peer %d" % peer_id)
 		return
 	unequip_item_requested.emit(peer_id, slot_id_value)
+
+
+func handle_use_item(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("Item use before authentication from peer %d" % peer_id)
+		return
+	var item_id_value: Variant = payload.get("item_id")
+	if item_id_value is not String or item_id_value.strip_edges().is_empty():
+		push_warning("Rejected malformed item use request from peer %d" % peer_id)
+		return
+	use_item_requested.emit(peer_id, item_id_value)
 
 
 func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
@@ -282,6 +296,30 @@ func send_equipment_result(peer_id: int, operation: String, result: Dictionary) 
 	)
 	if send_error != OK:
 		push_warning("Failed to send equipment result to peer %d: %s" % [peer_id, send_error])
+
+
+func send_item_use_result(peer_id: int, result: Dictionary) -> void:
+	if not sessions.has(peer_id):
+		push_warning("Cannot send item use result to missing peer %d" % peer_id)
+		return
+	var session: RefCounted = sessions[peer_id]
+	if not session.authenticated:
+		push_warning("Cannot send item use result to unauthenticated peer %d" % peer_id)
+		return
+	var send_error: Error = session.send(
+		ProtocolConstantsType.OPCODE_ITEM_USE_RESULT,
+		{
+			"accepted": bool(result.get("accepted", false)),
+			"reason": str(result.get("reason", "item_use_error")),
+			"item_id": str(result.get("item_id", "")),
+			"health": float(result.get("health", 0.0)),
+			"max_health": float(result.get("max_health", 0.0)),
+			"resource": float(result.get("resource", 0.0)),
+			"max_resource": float(result.get("max_resource", 0.0)),
+		},
+	)
+	if send_error != OK:
+		push_warning("Failed to send item use result to peer %d: %s" % [peer_id, send_error])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

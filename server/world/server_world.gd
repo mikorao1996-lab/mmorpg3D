@@ -210,6 +210,21 @@ func unequip_item(peer_id: int, slot_id: String) -> Dictionary:
 	return zone.unequip_item(peer_id, slot_id)
 
 
+func use_item(peer_id: int, item_id: String) -> Dictionary:
+	if not _peer_zones.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"item_id": item_id,
+			"health": 0.0,
+			"max_health": 0.0,
+			"resource": 0.0,
+			"max_resource": 0.0,
+		}
+	var zone: RefCounted = _zones[_peer_zones[peer_id]]
+	return zone.use_item(peer_id, item_id)
+
+
 func advance(delta: float) -> bool:
 	var snapshot_due: bool = false
 	for zone: RefCounted in _zones.values():

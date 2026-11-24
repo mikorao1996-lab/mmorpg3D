@@ -5,4 +5,5 @@
 .env
 /native/postgres/bin/
 /native/postgres/src/*.obj
+/native/postgres/src/*.obj.import
 /native/postgres/.sconsign.dblite

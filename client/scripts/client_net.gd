@@ -25,6 +25,15 @@ signal equipment_action_completed(
 	item_id: String,
 	slot_id: String,
 )
+signal item_use_completed(
+	accepted: bool,
+	reason: String,
+	item_id: String,
+	health: float,
+	max_health: float,
+	resource: float,
+	max_resource: float,
+)
 
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
@@ -174,6 +183,34 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 			)
 		ProtocolConstantsType.OPCODE_KEEPALIVE_ACK:
 			pass
+		ProtocolConstantsType.OPCODE_ITEM_USE_RESULT:
+			var accepted_value: Variant = payload.get("accepted", null)
+			var reason_value: Variant = payload.get("reason", null)
+			var item_id_value: Variant = payload.get("item_id", null)
+			var health_value: Variant = payload.get("health", null)
+			var max_health_value: Variant = payload.get("max_health", null)
+			var resource_value: Variant = payload.get("resource", null)
+			var max_resource_value: Variant = payload.get("max_resource", null)
+			if (
+				accepted_value is not bool
+				or reason_value is not String
+				or item_id_value is not String
+				or not _is_number(health_value)
+				or not _is_number(max_health_value)
+				or not _is_number(resource_value)
+				or not _is_number(max_resource_value)
+			):
+				push_warning("Rejected malformed item use result")
+				return
+			item_use_completed.emit(
+				accepted_value,
+				reason_value,
+				item_id_value,
+				float(health_value),
+				float(max_health_value),
+				float(resource_value),
+				float(max_resource_value),
+			)
 
 
 func send_hello() -> Error:
@@ -242,6 +279,16 @@ func request_unequip_item(slot_id: String) -> Error:
 		return ERR_INVALID_PARAMETER
 	return send_packet(ProtocolConstantsType.OPCODE_UNEQUIP_ITEM, {
 		"slot_id": slot_id,
+	})
+
+
+func request_use_item(item_id: String) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if item_id.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_USE_ITEM, {
+		"item_id": item_id,
 	})
 
 

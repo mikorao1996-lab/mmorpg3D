@@ -85,4 +85,20 @@ static func load_config() -> Dictionary:
 	):
 		push_error("inventory_slot_count must be a positive integer")
 		return {}
+	var server_address_value: Variant = config.get("server_address", null)
+	if (
+		server_address_value is not String
+		or str(server_address_value).strip_edges().is_empty()
+	):
+		push_error("Simulation config server_address must be a non-empty string")
+		return {}
+	var server_port_value: Variant = config.get("server_port", null)
+	if (
+		(typeof(server_port_value) != TYPE_INT and typeof(server_port_value) != TYPE_FLOAT)
+		or float(server_port_value) != floor(float(server_port_value))
+		or float(server_port_value) <= 0.0
+		or float(server_port_value) > 65535.0
+	):
+		push_error("Simulation config server_port must be a valid TCP/UDP port")
+		return {}
 	return config

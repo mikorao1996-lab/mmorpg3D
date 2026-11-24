@@ -10,14 +10,21 @@ if ([string]::IsNullOrWhiteSpace($godotExecutable)) {
 	$godotExecutable = $godotCommand.Source
 }
 
-$godotProcess = Start-Process -FilePath $godotExecutable -ArgumentList @(
-	"--headless",
-	"--path",
-	"`"$projectPath`"",
-	"--scene",
-	"res://tests/integration/network_loopback.tscn"
-) -NoNewWindow -Wait -PassThru
+$integrationScenes = @(
+	"res://tests/integration/network_loopback.tscn",
+	"res://tests/integration/client_ui_loopback.tscn"
+)
 
-if ($godotProcess.ExitCode -ne 0) {
-	throw "Network loopback integration test failed."
+foreach ($integrationScene in $integrationScenes) {
+	$godotProcess = Start-Process -FilePath $godotExecutable -ArgumentList @(
+		"--headless",
+		"--path",
+		"`"$projectPath`"",
+		"--scene",
+		$integrationScene
+	) -NoNewWindow -Wait -PassThru
+
+	if ($godotProcess.ExitCode -ne 0) {
+		throw "Integration test failed: $integrationScene"
+	}
 }

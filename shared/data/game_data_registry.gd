@@ -128,15 +128,21 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 					and float(stack_limit_value) == 1.0
 				)
 			)
+			var level_requirement_value: Variant = entry.get("level_requirement")
+			var level_requirement_valid: bool = (
+				_is_integer_at_least(level_requirement_value, 1)
+				and int(level_requirement_value) <= MAX_CHARACTER_LEVEL
+			)
 			if (
 				not _is_non_empty_string(entry.get("name_key"))
 				or not _is_enum_value(entry.get("item_type"), ITEM_TYPES)
 				or not equipment_slot_valid
 				or not equipment_stack_limit_valid
 				or not _is_integer_at_least(entry.get("stack_limit"), 1)
-				or not _is_integer_at_least(entry.get("level_requirement"), 1)
+				or not level_requirement_valid
 				or not _is_integer_at_least(entry.get("sell_price"), 0)
 				or not _validate_item_stats(entry.get("stats"))
+				or not _is_valid_consumable_effect(item_type, entry.get("stats"))
 			):
 				return "invalid item fields"
 		"abilities":
@@ -207,6 +213,20 @@ static func _validate_item_stats(stats_value: Variant) -> bool:
 		if not _is_number_at_least(stats_value[stat_name], 0.0):
 			return false
 	return true
+
+
+## Consumables must define a usable effect: healing or resource restoration.
+## Equipment and quest items intentionally have no consumable effect.
+static func _is_valid_consumable_effect(item_type: Variant, stats_value: Variant) -> bool:
+	if item_type != "consumable":
+		return true
+	if not stats_value is Dictionary:
+		return false
+	var stats: Dictionary = stats_value
+	return (
+		_is_number_greater_than(stats.get("health", 0.0), 0.0)
+		or _is_number_greater_than(stats.get("resource", 0.0), 0.0)
+	)
 
 
 static func validate_references(registries: Dictionary) -> String:

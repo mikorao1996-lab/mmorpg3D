@@ -1,7 +1,7 @@
 class_name ProtocolConstants
 extends RefCounted
 
-const PROTOCOL_VERSION: int = 5
+const PROTOCOL_VERSION: int = 6
 const SNAPSHOT_CHANNEL: int = 0
 const EVENT_CHANNEL: int = 1
 const ENET_USER_CHANNEL_OFFSET: int = 1
@@ -11,6 +11,7 @@ const PACKET_FLAG_UNRELIABLE: int = 0
 const HANDSHAKE_TIMEOUT_SECONDS: float = 10.0
 const MAX_REQUESTS_PER_SECOND: int = 20
 const SERVER_PORT: int = 7788
+const DEFAULT_SERVER_ADDRESS: String = "127.0.0.1"
 const OPCODE_HELLO: int = 1
 const OPCODE_HELLO_ACCEPTED: int = 2
 const OPCODE_HELLO_REJECTED: int = 3
@@ -27,6 +28,8 @@ const OPCODE_LOOT_PICKUP_RESULT: int = 13
 const OPCODE_EQUIP_ITEM: int = 14
 const OPCODE_UNEQUIP_ITEM: int = 15
 const OPCODE_EQUIPMENT_RESULT: int = 16
+const OPCODE_USE_ITEM: int = 17
+const OPCODE_ITEM_USE_RESULT: int = 18
 
 
 static func to_transport_channel(protocol_channel: int) -> int:
