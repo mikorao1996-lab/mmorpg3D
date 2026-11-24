@@ -54,6 +54,7 @@ func _ready() -> void:
 	server_listener.equip_item_requested.connect(_on_equip_item_requested)
 	server_listener.unequip_item_requested.connect(_on_unequip_item_requested)
 	server_listener.use_item_requested.connect(_on_use_item_requested)
+	server_listener.npc_interact_requested.connect(_on_npc_interact_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
 
@@ -107,3 +108,13 @@ func _on_unequip_item_requested(peer_id: int, slot_id: String) -> void:
 func _on_use_item_requested(peer_id: int, item_id: String) -> void:
 	var result: Dictionary = server_world.use_item(peer_id, item_id)
 	server_listener.send_item_use_result(peer_id, result)
+
+
+func _on_npc_interact_requested(
+	peer_id: int,
+	npc_id: String,
+	action: String,
+	quest_id: String,
+) -> void:
+	var result: Dictionary = server_world.interact_npc(peer_id, npc_id, action, quest_id)
+	server_listener.send_npc_interact_result(peer_id, result)

@@ -7,6 +7,9 @@ const EquipmentComponentType: GDScript = preload("res://server/systems/equipment
 const EquipmentSystemType: GDScript = preload("res://server/systems/equipment_system.gd")
 const LootSystemType: GDScript = preload("res://server/systems/loot_system.gd")
 const ConsumableSystemType: GDScript = preload("res://server/systems/consumable_system.gd")
+const QuestSystemType: GDScript = preload("res://server/systems/quest_system.gd")
+const NpcSystemType: GDScript = preload("res://server/systems/npc_system.gd")
+const ZoneSnapshotBuilderType: GDScript = preload("res://server/systems/zone_snapshot_builder.gd")
 
 var zone_id: String
 var _movement_speed: float
@@ -26,7 +29,10 @@ var _next_spawn_index: int = 0
 var _mob_definitions: Dictionary = {}
 var _item_definitions: Dictionary = {}
 var _progression_definitions: Dictionary = {}
+var _quest_definitions: Dictionary = {}
+var _npc_definitions: Dictionary = {}
 var _mobs: Dictionary = {}
+var _npcs: Dictionary = {}
 var _loot_system: LootSystem = LootSystemType.new()
 
 
@@ -49,6 +55,9 @@ func _init(
 	_mob_definitions = game_data_registry["mobs"]
 	_item_definitions = game_data_registry["items"]
 	_progression_definitions = game_data_registry["progression"]
+	_quest_definitions = game_data_registry["quests"]
+	_npc_definitions = game_data_registry["npcs"]
+	_npcs = NpcSystemType.build_states(_npc_definitions)
 	for mob_id: String in _mob_definitions:
 		var definition: Dictionary = _mob_definitions[mob_id]
 		var spawn_position: Array = definition["spawn_position"]
@@ -225,12 +234,111 @@ func pickup_loot(peer_id: int, drop_id: int) -> Dictionary:
 	if not _players.has(peer_id):
 		result["reason"] = "invalid_player"
 		return result
-	return _loot_system.pickup(
+	var pickup_result: Dictionary = _loot_system.pickup(
 		_players[peer_id],
 		drop_id,
 		_loot_pickup_range,
 		_item_definitions,
 	)
+	if bool(pickup_result.get("accepted", false)):
+		QuestSystemType.record_collect(
+			_players[peer_id],
+			str(pickup_result["item_id"]),
+			_quest_definitions,
+		)
+	return pickup_result
+
+
+## Handles a player interaction with an NPC.
+##
+## Supported actions are `talk`, `accept` and `turn_in`. The NPC system checks
+## the NPC, the interaction distance, the level requirement, and the quest
+## state; the reward of a handed-in quest is granted here, so the inventory and
+## the experience stay consistent.
+func interact_npc(
+	peer_id: int,
+	npc_id: String,
+	action: String,
+	quest_id: String,
+) -> Dictionary:
+	if not _players.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"action": action,
+			"npc_id": npc_id,
+			"npc_name_key": "",
+			"dialogue_key": "",
+			"quests": [],
+			"quest_id": quest_id,
+			"reward_experience": 0,
+			"reward_item_ids": [],
+			"grant_rewards": false,
+		}
+	var npc_state: Dictionary = NpcSystemType.get_npc_state(_npcs, npc_id)
+	var result: Dictionary = NpcSystemType.interact(
+		_players[peer_id],
+		npc_state,
+		_npc_definitions.get(npc_id, {}),
+		npc_id,
+		action,
+		quest_id,
+		_quest_definitions,
+		_item_definitions,
+	)
+	if not bool(result.get("grant_rewards", false)):
+		return result
+	_grant_quest_rewards(peer_id, quest_id, result)
+	result["quests"] = NpcSystemType.build_quest_list(
+		_players[peer_id],
+		npc_state,
+		_quest_definitions,
+	)
+	return result
+
+
+## Grants the experience and the items of a handed-in quest.
+func _grant_quest_rewards(
+	peer_id: int,
+	quest_id: String,
+	result: Dictionary,
+) -> void:
+	var quest_definition: Dictionary = _quest_definitions[quest_id]
+	var inventory: InventoryComponent = _players[peer_id]["inventory"]
+	for reward_item_id: String in quest_definition["reward_item_ids"]:
+		var add_result: Dictionary = inventory.add_item(
+			reward_item_id,
+			_item_definitions[reward_item_id],
+		)
+		if not bool(add_result["ok"]):
+			push_error(
+				"Could not grant quest reward item %s for quest %s"
+				% [reward_item_id, quest_id]
+			)
+			result["reason"] = "inventory_error"
+			return
+	var experience_result: Dictionary = award_experience(
+		peer_id,
+		int(quest_definition["reward_experience"]),
+	)
+	if not bool(experience_result.get("ok", false)):
+		push_error(
+			"Could not award quest experience for quest %s: %s"
+			% [quest_id, str(experience_result.get("error", "Unknown error."))]
+		)
+	QuestSystemType.mark_turned_in(_players[peer_id], quest_id)
+
+
+## Records a mob defeat for the quests of the attacking player.
+func record_quest_kill(peer_id: int, mob_id: String) -> void:
+	if not _players.has(peer_id):
+		return
+	QuestSystemType.record_kill(_players[peer_id], mob_id, _quest_definitions)
+
+
+## Returns the NPC states of this zone for the world snapshot.
+func get_npc_states() -> Dictionary:
+	return _npcs
 
 
 func equip_item(peer_id: int, item_id: String) -> Dictionary:
@@ -410,70 +518,20 @@ func create_snapshots() -> Dictionary:
 
 
 func _create_snapshot_for(observer_id: int) -> Dictionary:
-	var observer_state: Dictionary = _players[observer_id]
-	var observer_position: Vector3 = observer_state["position"]
-	var interest_radius_squared: float = _interest_radius * _interest_radius
-	var player_ids: Array = _players.keys()
-	player_ids.sort()
-	var player_states: Array = []
-	for peer_id: int in player_ids:
-		var player_state: Dictionary = _players[peer_id]
-		var player_position: Vector3 = player_state["position"]
-		if (
-			peer_id == observer_id
-			or observer_position.distance_squared_to(player_position) <= interest_radius_squared
-		):
-			player_states.append([
-				peer_id,
-				player_position,
-				player_state["health"],
-				player_state["max_health"],
-				player_state["level"],
-				player_state["experience"],
-				player_state["resource"],
-				player_state["max_resource"],
-				player_state["attack_multiplier"],
-				player_state["defense"],
-			])
-	var mob_ids: Array = _mobs.keys()
-	mob_ids.sort()
-	var mob_states: Array = []
-	for mob_id: String in mob_ids:
-		var mob_state: Dictionary = _mobs[mob_id]
-		var mob_definition: Dictionary = _mob_definitions[mob_id]
-		mob_states.append([
-			mob_id,
-			mob_state["position"],
-			mob_state["health"],
-			float(mob_definition["health"]),
-		])
-	var drops: Dictionary = _loot_system.get_drops()
-	var drop_ids: Array = drops.keys()
-	drop_ids.sort()
-	var drop_states: Array = []
-	for drop_id: int in drop_ids:
-		var drop: Dictionary = drops[drop_id]
-		if (
-			observer_position.distance_squared_to(drop["position"])
-			> interest_radius_squared
-		):
-			continue
-		drop_states.append([
-			drop_id,
-			drop["item_id"],
-			drop["position"],
-		])
-	var inventory: RefCounted = observer_state["inventory"]
-	var equipment: RefCounted = observer_state["equipment"]
-	return {
-		"zone_id": zone_id,
-		"server_time_ms": Time.get_ticks_msec(),
-		"players": player_states,
-		"mobs": mob_states,
-		"drops": drop_states,
-		"inventory": inventory.call("get_snapshot"),
-		"equipment": equipment.call("get_snapshot"),
-	}
+	return ZoneSnapshotBuilderType.build(
+		observer_id,
+		_players[observer_id],
+		{
+			"zone_id": zone_id,
+			"players": _players,
+			"mobs": _mobs,
+			"mob_definitions": _mob_definitions,
+			"npcs": _npcs,
+			"drops": _loot_system.get_drops(),
+			"interest_radius": _interest_radius,
+			"quest_definitions": _quest_definitions,
+		},
+	)
 
 
 func _create_player_state(position: Vector3) -> Dictionary:
@@ -497,6 +555,7 @@ func _create_player_state(position: Vector3) -> Dictionary:
 		"respawn_remaining_seconds": 0.0,
 		"inventory": InventoryComponentType.new(_inventory_slot_count),
 		"equipment": EquipmentComponentType.new(),
+		"quests": {},
 	}
 
 

@@ -2,7 +2,7 @@
 
 ## Bootstrap protocol constants
 
-- Protocol version: `6`
+- Protocol version: `7`
 - Snapshot channel: `0`, unreliable.
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
@@ -44,6 +44,8 @@ Opcodes:
 - `16`: `EQUIPMENT_RESULT`
 - `17`: `USE_ITEM`
 - `18`: `ITEM_USE_RESULT`
+- `19`: `NPC_INTERACT`
+- `20`: `NPC_INTERACT_RESULT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 
@@ -114,3 +116,26 @@ Rejection reasons are `invalid_player`, `player_dead`, `unknown_item`,
 The client resolves the server address and port from `resources/data/simulation.json`.
 `MMORPG3D_SERVER_ADDRESS` and `MMORPG3D_SERVER_PORT` override those values so a
 client can join a server on another machine without a rebuild.
+
+`NPC_INTERACT` requests contain `npc_id`, `action` and an optional `quest_id`.
+Supported actions are `talk`, `accept` and `turn_in`. Only authenticated peers
+can interact, and the server checks the NPC, the interaction distance from the
+NPC definition, the level requirement, the quest state, and the free inventory
+space before anything changes. `NPC_INTERACT_RESULT` reliably contains
+`accepted`, `reason`, `action`, `npc_id`, `npc_name_key`, `dialogue_key`, the
+`quests` list of the NPC, `quest_id`, `reward_experience`, and
+`reward_item_ids`. Every quest entry of the list contains `quest_id`,
+`name_key`, `status`, `progress`, `objective_count`, `objective_type`,
+`objective_target`, `min_level`, `reward_experience`, and `reward_item_ids`.
+The status is `available`, `active`, `completed`, or `turned_in`. Rejection
+reasons are `invalid_player`, `invalid_action`, `unknown_npc`, `out_of_range`,
+`unknown_quest`, `not_offered`, `level_requirement`, `already_active`,
+`already_turned_in`, `not_active`, `not_complete`, `inventory_full`, and
+`inventory_error`.
+
+The world snapshot of protocol version 7 additionally contains the `npcs` list
+with `[npc_id, position]` entries and the `quests` list of the observing
+player with `[quest_id, status, progress, objective_count, name_key,
+objective_type, objective_target]` entries. Quest progress is server
+authoritative: mob defeats, item pickups, and NPC conversations are counted on
+the server, and a quest can be handed in only once.

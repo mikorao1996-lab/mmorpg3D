@@ -63,6 +63,32 @@ func has_item(item_id: String) -> bool:
 	return false
 
 
+## Simulates adding the items and reports whether all of them would fit.
+##
+## The inventory is left untouched, so this can be used to validate a reward
+## before it is granted.
+func can_accept_items(item_ids: Array, item_definitions: Dictionary) -> bool:
+	var simulated: Array[Dictionary] = []
+	for slot: Dictionary in _slots:
+		simulated.append(slot.duplicate(true))
+	for item_id: String in item_ids:
+		var item_definition: Dictionary = item_definitions.get(item_id, {})
+		var stack_limit: int = int(item_definition.get("stack_limit", 1))
+		var placed: bool = false
+		for slot: Dictionary in simulated:
+			if slot["item_id"] != item_id or int(slot["quantity"]) >= stack_limit:
+				continue
+			slot["quantity"] = int(slot["quantity"]) + 1
+			placed = true
+			break
+		if placed:
+			continue
+		if simulated.size() >= _slot_capacity:
+			return false
+		simulated.append({"item_id": item_id, "quantity": 1})
+	return true
+
+
 func get_snapshot() -> Array:
 	var snapshot: Array = []
 	for slot: Dictionary in _slots:

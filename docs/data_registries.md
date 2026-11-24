@@ -1,8 +1,8 @@
 # Game data registries
 
 The server loads all registries through `GameDataRegistry.load_all()` before
-opening its ENet listener. Item, ability, mob, quest, and progression files use
-a versioned root object:
+opening its ENet listener. Item, ability, mob, quest, NPC, and progression files
+use a versioned root object:
 
 ```json
 {
@@ -85,12 +85,25 @@ File: `resources/data/quests.json`
 - `reward_experience`: integer >= 0.
 - `reward_item_ids`: unique item IDs; each must exist.
 - `kill` objectives must reference a registered mob; `collect` objectives must
-  reference a registered item. `talk` targets are non-empty NPC IDs; an NPC
-  registry is not defined yet.
-- Quest definitions are data only so far: the runtime quest system, acceptance,
-  progress tracking, and one-time rewards are not implemented yet.
+  reference a registered item; `talk` objectives must reference a registered NPC.
+- The quest runtime reads this registry: the server tracks the accepted quests
+  of every player, counts kills, pickups, and conversations, and grants the
+  reward exactly once. The reward items are only granted when the inventory can
+  hold all of them; otherwise the hand-in is rejected and no experience is
+  awarded.
+
+## NPCs
+
+File: `resources/data/npcs.json`
+
+- `id`, `name_key`, `dialogue_key`: non-empty strings. The dialogue key points
+  to a localized line that is shown when the player talks to the NPC.
+- `spawn_position`: three finite numbers; the world position of the NPC.
+- `interaction_range`: number > 0; the distance in world units in which the
+  player may interact with the NPC.
+- `quest_ids`: unique quest IDs; each must exist in the quest registry.
 
 `GameDataRegistry.load_all()` returns dictionaries keyed by entry ID under
-`items`, `abilities`, `mobs`, `progression`, and `quests`. These are initial
-schema contracts; database persistence and runtime gameplay systems are
-separate Phase 4/5 work.
+`items`, `abilities`, `mobs`, `progression`, `quests`, and `npcs`. These are
+initial schema contracts; database persistence and the trade and chat systems
+are separate Phase 5 work.

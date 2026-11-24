@@ -5,11 +5,14 @@ const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simu
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PlayerBodyAdapterType: GDScript = preload("res://client/scripts/player_body_adapter.gd")
 const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
+const WorldSnapshotParserType: GDScript = preload("res://client/scripts/world_snapshot_parser.gd")
 
 @onready var status_label: Label = $StatusCanvas/StatusPanel/StatusLabel
 @onready var hint_label: Label = $StatusCanvas/HintLabel
 @onready var camera: Camera3D = $Camera3D
 @onready var inventory_panel: PanelContainer = $InventoryCanvas/InventoryPanel
+@onready var npc_dialog_panel: PanelContainer = $QuestCanvas/NpcDialogPanel
+@onready var quest_tracker_panel: PanelContainer = $QuestCanvas/QuestTrackerPanel
 
 var _simulation_config: Dictionary = {}
 var _game_data_registry: Dictionary = {}
@@ -27,6 +30,9 @@ var _mob_states: Dictionary = {}
 var _mob_views: Dictionary = {}
 var _drop_states: Dictionary = {}
 var _drop_views: Dictionary = {}
+var _npc_states: Dictionary = {}
+var _npc_views: Dictionary = {}
+var _quest_states: Array = []
 var _inventory_state: Array[Dictionary] = []
 var _equipment_state: Dictionary = {}
 var _slash_key_down: bool = false
@@ -35,6 +41,7 @@ var _guard_break_key_down: bool = false
 var _whirlwind_key_down: bool = false
 var _second_wind_key_down: bool = false
 var _loot_key_down: bool = false
+var _interact_key_down: bool = false
 var _combat_message_time_remaining: float = 0.0
 
 
@@ -59,6 +66,10 @@ func _ready() -> void:
 	inventory_panel.equip_requested.connect(_on_equip_requested)
 	inventory_panel.unequip_requested.connect(_on_unequip_requested)
 	inventory_panel.use_item_requested.connect(_on_use_item_requested)
+	npc_dialog_panel.setup(_game_data_registry["items"], _game_data_registry["mobs"])
+	npc_dialog_panel.accept_quest_requested.connect(_on_accept_quest_requested)
+	npc_dialog_panel.turn_in_quest_requested.connect(_on_turn_in_quest_requested)
+	quest_tracker_panel.setup(_game_data_registry["items"], _game_data_registry["mobs"])
 	_client_net = ClientNet.new()
 	add_child(_client_net)
 	_client_net.hello_accepted.connect(_on_hello_accepted)
@@ -69,6 +80,7 @@ func _ready() -> void:
 	_client_net.loot_pickup_completed.connect(_on_loot_pickup_completed)
 	_client_net.equipment_action_completed.connect(_on_equipment_action_completed)
 	_client_net.item_use_completed.connect(_on_item_use_completed)
+	_client_net.npc_interaction_completed.connect(_on_npc_interaction_completed)
 
 	var error: Error = _client_net.connect_to_server(_server_address, _server_port)
 	if error != OK:
@@ -167,6 +179,10 @@ func _physics_process(delta: float) -> void:
 	if not player_is_defeated and loot_key_pressed and not _loot_key_down:
 		_request_nearest_loot()
 	_loot_key_down = loot_key_pressed
+	var interact_key_pressed: bool = Input.is_key_pressed(KEY_V)
+	if not player_is_defeated and interact_key_pressed and not _interact_key_down:
+		_request_nearest_npc()
+	_interact_key_down = interact_key_pressed
 
 
 func _process(_delta: float) -> void:
@@ -264,180 +280,31 @@ func _on_equipment_action_completed(
 
 
 func _on_world_snapshot(snapshot: Dictionary) -> void:
-	var player_entries: Variant = snapshot.get("players", null)
-	if not player_entries is Array:
-		push_warning("Rejected world snapshot without player list")
+	var parsed: Dictionary = WorldSnapshotParserType.parse(
+		snapshot,
+		_game_data_registry,
+		int(_simulation_config["inventory_slot_count"]),
+	)
+	if not bool(parsed["ok"]):
+		push_warning("Rejected world snapshot: %s" % str(parsed["error"]))
 		return
-	var mob_entries: Variant = snapshot.get("mobs", null)
-	if not mob_entries is Array:
-		push_warning("Rejected world snapshot without mob list")
-		return
-	var drop_entries: Variant = snapshot.get("drops", null)
-	if not drop_entries is Array:
-		push_warning("Rejected world snapshot without loot drops")
-		return
-	var inventory_entries: Variant = snapshot.get("inventory", null)
-	if (
-		not inventory_entries is Array
-		or inventory_entries.size() > int(_simulation_config["inventory_slot_count"])
-	):
-		push_warning("Rejected malformed inventory in world snapshot")
-		return
-	var equipment_entries: Variant = snapshot.get("equipment", null)
-	if (
-		not equipment_entries is Dictionary
-		or equipment_entries.size() != GameDataRegistryType.EQUIPMENT_SLOTS.size()
-	):
-		push_warning("Rejected malformed equipment in world snapshot")
-		return
-	var equipment_state: Dictionary = {}
-	for slot_id: String in GameDataRegistryType.EQUIPMENT_SLOTS:
-		var item_id: Variant = equipment_entries.get(slot_id, null)
-		if item_id is not String:
-			push_warning("Rejected malformed equipment slot")
-			return
-		if not item_id.is_empty():
-			var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
-			if (
-				item_definition.is_empty()
-				or str(item_definition.get("equipment_slot", "")) != slot_id
-			):
-				push_warning("Rejected invalid equipped item %s" % item_id)
-				return
-		equipment_state[slot_id] = item_id
-
-	var positions: Dictionary = {}
-	var player_health_states: Dictionary = {}
-	for entry: Variant in player_entries:
-		if not entry is Array or entry.size() != 10:
-			push_warning("Rejected malformed player entry in world snapshot")
-			return
-		var player_id: Variant = entry[0]
-		var position: Variant = entry[1]
-		var health: Variant = entry[2]
-		var max_health: Variant = entry[3]
-		var level: Variant = entry[4]
-		var experience: Variant = entry[5]
-		var resource: Variant = entry[6]
-		var max_resource: Variant = entry[7]
-		var attack_multiplier: Variant = entry[8]
-		var defense: Variant = entry[9]
-		if (
-			player_id is not int
-			or position is not Vector3
-			or not _is_finite_number(health)
-			or not _is_finite_number(max_health)
-			or level is not int
-			or experience is not int
-			or experience < 0
-			or not _is_finite_number(resource)
-			or not _is_finite_number(max_resource)
-			or not _is_finite_number(attack_multiplier)
-			or not _is_finite_number(defense)
-			or float(max_health) <= 0.0
-			or level < 1
-			or level > _game_data_registry["progression"].size()
-			or float(max_resource) <= 0.0
-			or float(attack_multiplier) <= 0.0
-			or float(defense) < 0.0
-			or float(health) < 0.0
-			or float(health) > float(max_health)
-			or float(resource) < 0.0
-			or float(resource) > float(max_resource)
-		):
-			push_warning("Rejected malformed player state in world snapshot")
-			return
-		positions[player_id] = position
-		player_health_states[player_id] = {
-			"health": float(health),
-			"max_health": float(max_health),
-			"level": level,
-			"experience": int(experience),
-			"resource": float(resource),
-			"max_resource": float(max_resource),
-			"attack_multiplier": float(attack_multiplier),
-			"defense": float(defense),
-		}
+	var positions: Dictionary = parsed["positions"]
+	var player_health_states: Dictionary = parsed["player_health_states"]
+	var new_mob_states: Dictionary = parsed["mob_states"]
+	var new_drop_states: Dictionary = parsed["drop_states"]
+	var new_npc_states: Dictionary = parsed["npc_states"]
+	var new_quest_states: Array = parsed["quest_states"]
+	var inventory_state: Array = parsed["inventory_state"]
+	var equipment_state: Dictionary = parsed["equipment_state"]
+	for player_id: int in positions:
 		_ensure_player_view(player_id)
 		if player_id == _local_player_id and not _has_authoritative_position:
-			_predicted_position = position
+			_predicted_position = positions[player_id]
 			var local_player_view: PlayerBodyAdapter = _player_views[player_id]
-			local_player_view.set_simulated_position(position)
+			local_player_view.set_simulated_position(positions[player_id])
 			_has_authoritative_position = true
-
-	var new_mob_states: Dictionary = {}
-	for entry: Variant in mob_entries:
-		if not entry is Array or entry.size() != 4:
-			push_warning("Rejected malformed mob entry in world snapshot")
-			return
-		var mob_id: Variant = entry[0]
-		var position: Variant = entry[1]
-		var health: Variant = entry[2]
-		var max_health: Variant = entry[3]
-		if (
-			mob_id is not String
-			or position is not Vector3
-			or not _is_finite_number(health)
-			or not _is_finite_number(max_health)
-			or float(max_health) <= 0.0
-			or float(health) < 0.0
-			or float(health) > float(max_health)
-		):
-			push_warning("Rejected malformed mob state in world snapshot")
-			return
-		if not _game_data_registry["mobs"].has(mob_id):
-			push_warning("Rejected snapshot for unknown mob %s" % mob_id)
-			return
-		new_mob_states[mob_id] = {
-			"position": position,
-			"health": float(health),
-			"max_health": float(max_health),
-		}
+	for mob_id: String in new_mob_states:
 		_ensure_mob_view(mob_id)
-
-	var new_drop_states: Dictionary = {}
-	for entry: Variant in drop_entries:
-		if not entry is Array or entry.size() != 3:
-			push_warning("Rejected malformed loot drop in world snapshot")
-			return
-		var drop_id: Variant = entry[0]
-		var item_id: Variant = entry[1]
-		var drop_position: Variant = entry[2]
-		if (
-			drop_id is not int
-			or drop_id < 1
-			or item_id is not String
-			or drop_position is not Vector3
-			or not _game_data_registry["items"].has(item_id)
-			or new_drop_states.has(drop_id)
-		):
-			push_warning("Rejected malformed loot drop state")
-			return
-		new_drop_states[drop_id] = {
-			"item_id": item_id,
-			"position": drop_position,
-		}
-
-	var inventory_state: Array[Dictionary] = []
-	for entry: Variant in inventory_entries:
-		if not entry is Array or entry.size() != 2:
-			push_warning("Rejected malformed inventory slot")
-			return
-		var item_id: Variant = entry[0]
-		var quantity: Variant = entry[1]
-		if (
-			item_id is not String
-			or quantity is not int
-			or quantity < 1
-			or not _game_data_registry["items"].has(item_id)
-			or quantity > int(_game_data_registry["items"][item_id]["stack_limit"])
-		):
-			push_warning("Rejected malformed inventory item")
-			return
-		inventory_state.append({
-			"item_id": item_id,
-			"quantity": quantity,
-		})
 
 	var snapshot_record: Dictionary = {
 		"received_at_ms": Time.get_ticks_msec(),
@@ -446,8 +313,23 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	_player_health_states = player_health_states
 	_mob_states = new_mob_states
 	_drop_states = new_drop_states
+	_npc_states = new_npc_states
+	_quest_states = new_quest_states
 	_inventory_state = inventory_state
 	_equipment_state = equipment_state
+	var existing_npc_ids: Array = _npc_views.keys()
+	for npc_id: String in existing_npc_ids:
+		if not _npc_states.has(npc_id):
+			var npc_view: Node3D = _npc_views[npc_id]
+			npc_view.queue_free()
+			_npc_views.erase(npc_id)
+		else:
+			var npc_view: Node3D = _npc_views[npc_id]
+			npc_view.position = _npc_states[npc_id]["position"]
+	for npc_id: String in _npc_states:
+		_ensure_npc_view(npc_id)
+		var npc_view: Node3D = _npc_views[npc_id]
+		npc_view.position = _npc_states[npc_id]["position"]
 	var existing_mob_ids: Array = _mob_views.keys()
 	for mob_id: String in existing_mob_ids:
 		if not _mob_states.has(mob_id):
@@ -473,6 +355,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		)
 	_update_combat_status()
 	_update_inventory_panel()
+	_update_quest_tracker()
 	_snapshot_buffer.append(snapshot_record)
 	var capacity: int = int(_simulation_config["snapshot_buffer_capacity"])
 	while _snapshot_buffer.size() > capacity:
@@ -590,6 +473,25 @@ func _ensure_mob_view(mob_id: String) -> void:
 	_mob_views[mob_id] = mob_view
 
 
+func _ensure_npc_view(npc_id: String) -> void:
+	if _npc_views.has(npc_id):
+		return
+	var npc_view: Node3D = Node3D.new()
+	npc_view.name = "Npc_%s" % npc_id
+	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+	var capsule: CapsuleMesh = CapsuleMesh.new()
+	capsule.radius = float(_simulation_config["player_visual_radius"])
+	capsule.height = float(_simulation_config["player_visual_height"])
+	mesh_instance.mesh = capsule
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(0.85, 0.72, 0.3)
+	mesh_instance.material_override = material
+	mesh_instance.position.y = capsule.height / 2.0
+	npc_view.add_child(mesh_instance)
+	add_child(npc_view)
+	_npc_views[npc_id] = npc_view
+
+
 func _ensure_loot_view(drop_id: int) -> void:
 	if _drop_views.has(drop_id):
 		return
@@ -610,6 +512,10 @@ func _update_inventory_panel() -> void:
 	var local_state: Dictionary = _player_health_states.get(_local_player_id, {})
 	var local_level: int = int(local_state.get("level", 1))
 	inventory_panel.update_view(_inventory_state, _equipment_state, local_level)
+
+
+func _update_quest_tracker() -> void:
+	quest_tracker_panel.update_view(_quest_states)
 
 
 func _update_combat_status() -> void:
@@ -705,6 +611,75 @@ func _on_item_use_completed(
 	else:
 		status_label.text = tr("item_use_failed") % tr("item_use_reason_" + reason)
 	_combat_message_time_remaining = 2.0
+
+
+## Finds the closest NPC the player can reach and starts a conversation.
+func _request_nearest_npc() -> void:
+	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
+	if local_view == null or _npc_states.is_empty():
+		return
+	var nearest_npc_id: String = ""
+	var nearest_distance_squared: float = INF
+	for npc_id: String in _npc_states:
+		var npc_definition: Dictionary = _game_data_registry["npcs"].get(npc_id, {})
+		var interaction_range: float = float(npc_definition.get("interaction_range", 0.0))
+		var npc_position: Vector3 = _npc_states[npc_id]["position"]
+		var distance_squared: float = local_view.global_position.distance_squared_to(
+			npc_position
+		)
+		if distance_squared > interaction_range * interaction_range:
+			continue
+		if distance_squared < nearest_distance_squared:
+			nearest_distance_squared = distance_squared
+			nearest_npc_id = npc_id
+	if nearest_npc_id.is_empty():
+		status_label.text = tr("interact_no_npc")
+		_combat_message_time_remaining = 1.0
+		return
+	var error: Error = _client_net.request_npc_interact(nearest_npc_id, "talk")
+	if error != OK:
+		push_warning("Could not request NPC interaction: %s" % error)
+
+
+func _on_accept_quest_requested(npc_id: String, quest_id: String) -> void:
+	var error: Error = _client_net.request_npc_interact(npc_id, "accept", quest_id)
+	if error != OK:
+		push_warning("Could not request quest acceptance: %s" % error)
+
+
+func _on_turn_in_quest_requested(npc_id: String, quest_id: String) -> void:
+	var error: Error = _client_net.request_npc_interact(npc_id, "turn_in", quest_id)
+	if error != OK:
+		push_warning("Could not request quest turn-in: %s" % error)
+
+
+func _on_npc_interaction_completed(
+	accepted: bool,
+	reason: String,
+	action: String,
+	npc_id: String,
+	npc_name_key: String,
+	dialogue_key: String,
+	quests: Array,
+	quest_id: String,
+	reward_experience: int,
+	reward_item_ids: Array,
+) -> void:
+	if not accepted:
+		status_label.text = tr("interact_failed") % tr("interact_reason_" + reason)
+		_combat_message_time_remaining = 2.0
+		return
+	if action == "turn_in":
+		var reward_names: PackedStringArray = []
+		for item_id: String in reward_item_ids:
+			var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
+			reward_names.append(tr(str(item_definition.get("name_key", item_id))))
+		status_label.text = tr("quest_turn_in_success") % [
+			reward_experience,
+			", ".join(reward_names),
+		]
+		_combat_message_time_remaining = 2.0
+	npc_dialog_panel.show_npc(npc_id, npc_name_key, dialogue_key, quests)
 
 
 func _request_nearest_loot() -> void:

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "quest_giver_mira",
+      "name_key": "npc_quest_giver_mira",
+      "dialogue_key": "npc_dialogue_mira",
+      "spawn_position": [0.0, 0.0, 4.0],
+      "interaction_range": 3.0,
+      "quest_ids": [
+        "slime_problem",
+        "wolf_problem",
+        "gel_collection",
+        "training_grounds"
+      ]
+    },
+    {
+      "id": "quest_giver_bron",
+      "name_key": "npc_quest_giver_bron",
+      "dialogue_key": "npc_dialogue_bron",
+      "spawn_position": [7.0, 0.0, -3.0],
+      "interaction_range": 3.0,
+      "quest_ids": [
+        "pelt_hunt"
+      ]
+    }
+  ]
+}

@@ -34,6 +34,18 @@ signal item_use_completed(
 	resource: float,
 	max_resource: float,
 )
+signal npc_interaction_completed(
+	accepted: bool,
+	reason: String,
+	action: String,
+	npc_id: String,
+	npc_name_key: String,
+	dialogue_key: String,
+	quests: Array,
+	quest_id: String,
+	reward_experience: int,
+	reward_item_ids: Array,
+)
 
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
@@ -211,6 +223,43 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 				float(resource_value),
 				float(max_resource_value),
 			)
+		ProtocolConstantsType.OPCODE_NPC_INTERACT_RESULT:
+			var interact_accepted: Variant = payload.get("accepted", null)
+			var interact_reason: Variant = payload.get("reason", null)
+			var interact_action: Variant = payload.get("action", null)
+			var interact_npc_id: Variant = payload.get("npc_id", null)
+			var interact_name_key: Variant = payload.get("npc_name_key", null)
+			var interact_dialogue_key: Variant = payload.get("dialogue_key", null)
+			var interact_quests: Variant = payload.get("quests", null)
+			var interact_quest_id: Variant = payload.get("quest_id", null)
+			var interact_reward_experience: Variant = payload.get("reward_experience", null)
+			var interact_reward_items: Variant = payload.get("reward_item_ids", null)
+			if (
+				interact_accepted is not bool
+				or interact_reason is not String
+				or interact_action is not String
+				or interact_npc_id is not String
+				or interact_name_key is not String
+				or interact_dialogue_key is not String
+				or not interact_quests is Array
+				or interact_quest_id is not String
+				or not _is_number(interact_reward_experience)
+				or not interact_reward_items is Array
+			):
+				push_warning("Rejected malformed NPC interaction result")
+				return
+			npc_interaction_completed.emit(
+				interact_accepted,
+				interact_reason,
+				interact_action,
+				interact_npc_id,
+				interact_name_key,
+				interact_dialogue_key,
+				interact_quests,
+				interact_quest_id,
+				int(interact_reward_experience),
+				interact_reward_items,
+			)
 
 
 func send_hello() -> Error:
@@ -289,6 +338,24 @@ func request_use_item(item_id: String) -> Error:
 		return ERR_INVALID_PARAMETER
 	return send_packet(ProtocolConstantsType.OPCODE_USE_ITEM, {
 		"item_id": item_id,
+	})
+
+
+## Requests an NPC interaction. Supported actions are `talk`, `accept` and
+## `turn_in`; the server decides whether the request is allowed.
+func request_npc_interact(
+	npc_id: String,
+	action: String,
+	quest_id: String = "",
+) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if npc_id.strip_edges().is_empty() or action.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_NPC_INTERACT, {
+		"npc_id": npc_id,
+		"action": action,
+		"quest_id": quest_id,
 	})
 
 

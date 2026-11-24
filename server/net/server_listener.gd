@@ -10,6 +10,7 @@ signal loot_pickup_requested(peer_id: int, drop_id: int)
 signal equip_item_requested(peer_id: int, item_id: String)
 signal unequip_item_requested(peer_id: int, slot_id: String)
 signal use_item_requested(peer_id: int, item_id: String)
+signal npc_interact_requested(peer_id: int, npc_id: String, action: String, quest_id: String)
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
@@ -96,6 +97,8 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 		handle_unequip_item(session, peer_id, payload)
 	elif opcode == ProtocolConstantsType.OPCODE_USE_ITEM:
 		handle_use_item(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_NPC_INTERACT:
+		handle_npc_interact(session, peer_id, payload)
 	else:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
@@ -200,6 +203,30 @@ func handle_use_item(session: RefCounted, peer_id: int, payload: Dictionary) -> 
 		push_warning("Rejected malformed item use request from peer %d" % peer_id)
 		return
 	use_item_requested.emit(peer_id, item_id_value)
+
+
+func handle_npc_interact(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("NPC interaction before authentication from peer %d" % peer_id)
+		return
+	var npc_id_value: Variant = payload.get("npc_id")
+	var action_value: Variant = payload.get("action")
+	var quest_id_value: Variant = payload.get("quest_id", "")
+	if npc_id_value is not String or npc_id_value.strip_edges().is_empty():
+		push_warning("Rejected malformed NPC interaction from peer %d" % peer_id)
+		return
+	if action_value is not String or action_value.strip_edges().is_empty():
+		push_warning("Rejected malformed NPC interaction action from peer %d" % peer_id)
+		return
+	if quest_id_value is not String:
+		push_warning("Rejected malformed NPC interaction quest id from peer %d" % peer_id)
+		return
+	npc_interact_requested.emit(
+		peer_id,
+		npc_id_value,
+		action_value,
+		quest_id_value,
+	)
 
 
 func broadcast_world_snapshots(snapshots_by_peer: Dictionary) -> void:
@@ -320,6 +347,35 @@ func send_item_use_result(peer_id: int, result: Dictionary) -> void:
 	)
 	if send_error != OK:
 		push_warning("Failed to send item use result to peer %d: %s" % [peer_id, send_error])
+
+
+func send_npc_interact_result(peer_id: int, result: Dictionary) -> void:
+	if not sessions.has(peer_id):
+		push_warning("Cannot send NPC interaction result to missing peer %d" % peer_id)
+		return
+	var session: RefCounted = sessions[peer_id]
+	if not session.authenticated:
+		push_warning("Cannot send NPC interaction result to unauthenticated peer %d" % peer_id)
+		return
+	var send_error: Error = session.send(
+		ProtocolConstantsType.OPCODE_NPC_INTERACT_RESULT,
+		{
+			"accepted": bool(result.get("accepted", false)),
+			"reason": str(result.get("reason", "npc_interact_error")),
+			"action": str(result.get("action", "talk")),
+			"npc_id": str(result.get("npc_id", "")),
+			"npc_name_key": str(result.get("npc_name_key", "")),
+			"dialogue_key": str(result.get("dialogue_key", "")),
+			"quests": result.get("quests", []),
+			"quest_id": str(result.get("quest_id", "")),
+			"reward_experience": int(result.get("reward_experience", 0)),
+			"reward_item_ids": result.get("reward_item_ids", []),
+		},
+	)
+	if send_error != OK:
+		push_warning(
+			"Failed to send NPC interaction result to peer %d: %s" % [peer_id, send_error]
+		)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" uid="uid://sktydkhb68lh" path="res://client/scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://client/scripts/inventory_panel.gd" id="2"]
+[ext_resource type="Script" path="res://client/scripts/quest_tracker_panel.gd" id="3"]
+[ext_resource type="Script" path="res://client/scripts/npc_dialog_panel.gd" id="4"]
 
 [sub_resource type="Environment" id="Environment_bootstrap"]
 background_mode = 1
@@ -65,3 +67,27 @@ offset_right = -16.0
 offset_bottom = 620.0
 grow_horizontal = 0
 script = ExtResource("2")
+
+[node name="QuestCanvas" type="CanvasLayer" parent="."]
+
+[node name="QuestTrackerPanel" type="PanelContainer" parent="QuestCanvas"]
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 60.0
+offset_right = 324.0
+offset_bottom = 240.0
+script = ExtResource("3")
+
+[node name="NpcDialogPanel" type="PanelContainer" parent="QuestCanvas"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -320.0
+offset_right = 260.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("4")

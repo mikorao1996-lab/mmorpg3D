@@ -13,6 +13,8 @@ const EquipmentTest: GDScript = preload("res://tests/unit/equipment_test.gd")
 const ItemCatalogTest: GDScript = preload("res://tests/unit/item_catalog_test.gd")
 const ConsumableTest: GDScript = preload("res://tests/unit/consumable_test.gd")
 const InventoryPanelTest: GDScript = preload("res://tests/unit/inventory_panel_test.gd")
+const QuestSystemTest: GDScript = preload("res://tests/unit/quest_system_test.gd")
+const NpcRegistryTest: GDScript = preload("res://tests/unit/npc_registry_test.gd")
 
 
 func _initialize() -> void:
@@ -53,6 +55,12 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not InventoryPanelTest.new(root).run():
+		quit(1)
+		return
+	if not QuestSystemTest.new().run():
+		quit(1)
+		return
+	if not NpcRegistryTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

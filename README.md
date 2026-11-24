@@ -74,17 +74,27 @@ request is accepted; the panel only renders the authoritative snapshot, so an
 item above the character level stays locked and a potion is never wasted while
 health is full.
 
+**V** talks to the closest NPC in interaction range. The dialogue panel at the
+bottom shows the localized dialogue and the quests of that NPC: **Accept**
+sends `NPC_INTERACT` with the action `accept`, **Turn in** sends it with
+`turn_in`. The quest tracker in the top-left corner lists the accepted quests
+with their progress. The server counts kills, item pickups, and conversations,
+and hands out the reward of a quest only once. A hand-in is rejected when the
+reward does not fit into the inventory, so no experience is lost.
+
 The simulation config defines in-memory zones `starter` and `dungeon`; clients
 start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
 is available for server-validated transfers, but there is not yet a portal or
 zone-selection UI.
 
-The server loads the versioned item, ability, mob, and quest JSON registries
-before listening. Their initial schema and cross-reference rules are described
-in [docs/data_registries.md](./docs/data_registries.md). The item catalog holds
-18 items: three weapons, armor for all six slots, three consumables, and two
-quest items. Every equipment slot has at least one item that can be obtained
-from mob loot or a quest reward.
+The server loads the versioned item, ability, mob, quest, NPC, and progression
+JSON registries before listening. Their initial schema and cross-reference rules
+are described in [docs/data_registries.md](./docs/data_registries.md). The item
+catalog holds 18 items: three weapons, armor for all six slots, three
+consumables, and two quest items. Every equipment slot has at least one item
+that can be obtained from mob loot or a quest reward. The quest catalog holds
+five quests with kill, collect, and talk objectives, and two quest givers hand
+them out.
 
 ## Unit checks
 
@@ -113,6 +123,12 @@ The second integration scene loads the production client scene against an
 in-process server and verifies that a snapshot reaches the inventory panel:
 six gear slots, the granted loot stacks, and a consumable use request that the
 server rejects while the player is at full health.
+
+The third integration scene walks the full quest cycle against the production
+client scene: talk to the NPC, accept the quest, defeat the target mob, and
+hand the quest in. It checks that the dialogue panel lists the NPC quests, that
+the quest tracker reports the progress, and that the hand-in grants the reward
+exactly once.
 
 ## PostgreSQL driver spike
 

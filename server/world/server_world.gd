@@ -169,6 +169,7 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 				"Could not spawn loot for mob %s: %s"
 				% [target_mob_id, str(loot_result.get("error", "Unknown error."))],
 			)
+		zone.record_quest_kill(peer_id, target_mob_id)
 	result["accepted"] = true
 	result["health"] = updated_target_state["health"]
 	result["max_health"] = updated_target_state["max_health"]
@@ -223,6 +224,30 @@ func use_item(peer_id: int, item_id: String) -> Dictionary:
 		}
 	var zone: RefCounted = _zones[_peer_zones[peer_id]]
 	return zone.use_item(peer_id, item_id)
+
+
+## Routes an NPC interaction to the zone of the player.
+func interact_npc(
+	peer_id: int,
+	npc_id: String,
+	action: String,
+	quest_id: String,
+) -> Dictionary:
+	if not _peer_zones.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"action": action,
+			"npc_id": npc_id,
+			"npc_name_key": "",
+			"dialogue_key": "",
+			"quests": [],
+			"quest_id": quest_id,
+			"reward_experience": 0,
+			"reward_item_ids": [],
+		}
+	var zone: RefCounted = _zones[_peer_zones[peer_id]]
+	return zone.interact_npc(peer_id, npc_id, action, quest_id)
 
 
 func advance(delta: float) -> bool:

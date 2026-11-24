@@ -27,6 +27,42 @@
         "worn_boots",
         "leather_greaves"
       ]
+    },
+    {
+      "id": "pelt_hunt",
+      "name_key": "quest_pelt_hunt",
+      "min_level": 2,
+      "objective_type": "collect",
+      "objective_target": "wolf_pelt",
+      "objective_count": 2,
+      "reward_experience": 30,
+      "reward_item_ids": [
+        "iron_boots"
+      ]
+    },
+    {
+      "id": "gel_collection",
+      "name_key": "quest_gel_collection",
+      "min_level": 1,
+      "objective_type": "collect",
+      "objective_target": "slime_gel",
+      "objective_count": 3,
+      "reward_experience": 20,
+      "reward_item_ids": [
+        "cloth_wraps"
+      ]
+    },
+    {
+      "id": "training_grounds",
+      "name_key": "quest_training_grounds",
+      "min_level": 1,
+      "objective_type": "talk",
+      "objective_target": "quest_giver_mira",
+      "objective_count": 1,
+      "reward_experience": 15,
+      "reward_item_ids": [
+        "minor_potion"
+      ]
     }
   ]
 }

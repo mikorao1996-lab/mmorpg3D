@@ -7,6 +7,7 @@ const REGISTRY_PATHS: Dictionary = {
 	"mobs": "res://resources/data/mobs.json",
 	"progression": "res://resources/data/progression.json",
 	"quests": "res://resources/data/quests.json",
+	"npcs": "res://resources/data/npcs.json",
 }
 const ITEM_TYPES: PackedStringArray = ["weapon", "armor", "consumable", "quest"]
 const EQUIPMENT_SLOTS: PackedStringArray = [
@@ -199,6 +200,15 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 				or not _is_string_array(entry.get("reward_item_ids"))
 			):
 				return "invalid quest fields"
+		"npcs":
+			if (
+				not _is_non_empty_string(entry.get("name_key"))
+				or not _is_non_empty_string(entry.get("dialogue_key"))
+				or not _is_vector3_array(entry.get("spawn_position"))
+				or not _is_number_greater_than(entry.get("interaction_range"), 0.0)
+				or not _is_string_array(entry.get("quest_ids"))
+			):
+				return "invalid npc fields"
 		_:
 			return "unknown game data registry: %s" % registry_name
 	return ""
@@ -235,6 +245,7 @@ static func validate_references(registries: Dictionary) -> String:
 		or not registries.has("mobs")
 		or not registries.has("progression")
 		or not registries.has("quests")
+		or not registries.has("npcs")
 	):
 		return "Game data registries are missing required collections"
 	var items: Dictionary = registries["items"]
@@ -276,6 +287,7 @@ static func validate_references(registries: Dictionary) -> String:
 			if not items.has(item_id):
 				return "Mob %s references unknown loot item %s" % [mob["id"], item_id]
 
+	var npcs: Dictionary = registries["npcs"]
 	for quest: Dictionary in registries["quests"].values():
 		var objective_type: String = quest["objective_type"]
 		var target_id: String = quest["objective_target"]
@@ -283,9 +295,16 @@ static func validate_references(registries: Dictionary) -> String:
 			return "Quest %s references unknown mob %s" % [quest["id"], target_id]
 		if objective_type == "collect" and not items.has(target_id):
 			return "Quest %s references unknown item %s" % [quest["id"], target_id]
+		if objective_type == "talk" and not npcs.has(target_id):
+			return "Quest %s references unknown npc %s" % [quest["id"], target_id]
 		for item_id: String in quest["reward_item_ids"]:
 			if not items.has(item_id):
 				return "Quest %s references unknown reward item %s" % [quest["id"], item_id]
+
+	for npc: Dictionary in npcs.values():
+		for quest_id: String in npc["quest_ids"]:
+			if not registries["quests"].has(quest_id):
+				return "NPC %s references unknown quest %s" % [npc["id"], quest_id]
 	return ""
 
 
