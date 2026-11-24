@@ -9,6 +9,7 @@ connection_failed,"Could not start network client","Не удалось запу
 simulation_config_error,"Simulation configuration is invalid","Ошибка конфигурации симуляции"
 game_data_error,"Game data is invalid","Ошибка игровых данных"
 mob_training_slime,"Training Slime","Тренировочная слизь"
+mob_training_wolf,"Training Wolf","Учебный волк"
 ability_starter_slash,"Quick Slash","Быстрый удар"
 ability_heavy_strike,"Heavy Strike","Тяжёлый удар"
 ability_guard_break,"Guard Break","Сокрушение защиты"

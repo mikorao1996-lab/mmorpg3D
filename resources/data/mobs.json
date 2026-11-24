@@ -19,6 +19,25 @@
       "loot_item_ids": [
         "minor_potion"
       ]
+    },
+    {
+      "id": "training_wolf",
+      "name_key": "mob_training_wolf",
+      "level": 2,
+      "health": 42,
+      "attack": 5,
+      "defense": 1,
+      "move_speed": 1.8,
+      "aggro_range": 5,
+      "attack_range": 1.25,
+      "attack_interval_seconds": 1.25,
+      "respawn_seconds": 10,
+      "spawn_position": [8, 0, -7],
+      "visual_radius": 0.45,
+      "visual_height": 0.9,
+      "loot_item_ids": [
+        "minor_potion"
+      ]
     }
   ]
 }

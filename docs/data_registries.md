@@ -65,3 +65,5 @@ File: `resources/data/quests.json`
 `GameDataRegistry.load_all()` returns dictionaries keyed by entry ID under
 `items`, `abilities`, `mobs`, and `quests`. These are initial schema contracts;
 database persistence and runtime gameplay systems are separate Phase 4/5 work.
+Mob loot item IDs are validated as references; authoritative loot drops are
+not implemented yet.
