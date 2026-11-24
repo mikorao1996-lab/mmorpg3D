@@ -4,6 +4,7 @@
     {
       "id": "training_slime",
       "name_key": "mob_training_slime",
+      "is_boss": false,
       "level": 1,
       "experience_reward": 25,
       "health": 30,
@@ -24,6 +25,7 @@
     {
       "id": "training_wolf",
       "name_key": "mob_training_wolf",
+      "is_boss": false,
       "level": 2,
       "experience_reward": 40,
       "health": 42,
@@ -39,6 +41,27 @@
       "visual_height": 0.9,
       "loot_item_ids": [
         "minor_potion"
+      ]
+    },
+    {
+      "id": "training_guardian",
+      "name_key": "mob_training_guardian",
+      "is_boss": true,
+      "level": 5,
+      "experience_reward": 120,
+      "health": 160,
+      "attack": 11,
+      "defense": 2,
+      "move_speed": 1.5,
+      "aggro_range": 7,
+      "attack_range": 1.5,
+      "attack_interval_seconds": 1.7,
+      "respawn_seconds": 45,
+      "spawn_position": [-6, 0, -8],
+      "visual_radius": 0.75,
+      "visual_height": 1.8,
+      "loot_item_ids": [
+        "starter_sword"
       ]
     }
   ]

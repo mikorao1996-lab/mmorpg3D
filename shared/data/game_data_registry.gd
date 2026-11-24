@@ -120,6 +120,7 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 		"mobs":
 			if (
 				not _is_non_empty_string(entry.get("name_key"))
+				or typeof(entry.get("is_boss")) != TYPE_BOOL
 				or not _is_integer_at_least(entry.get("level"), 1)
 				or not _is_integer_at_least(entry.get("experience_reward"), 0)
 				or not _is_number_greater_than(entry.get("health"), 0.0)

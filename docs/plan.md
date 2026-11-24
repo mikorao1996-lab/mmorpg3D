@@ -18,6 +18,7 @@
 - **Phase 3:** серверная симуляция движения, prediction/interpolation, AOI, отключение сущностей и тестовые zone transfer.
 - **Phase 4 — JSON:** versioned registries items/abilities/mobs/progression/quests, загрузка и валидация данных на старте.
 - **Phase 5 — основа боя:** `starter_slash` и `heavy_strike`, training slime и training wolf с серверным aggro/chase/attack, уровни 1–10 с опытом за убийства и серверными характеристиками, здоровье игрока, смерть и респавн; локализованный HUD.
+- **Phase 5 — мини-босс:** training guardian с отдельными характеристиками, внешним видом, наградой и дропом, использующий серверную симуляцию боя.
 - **Phase 5 — loot/inventory foundation:** гарантированные дропы мобов, серверная проверка дистанции и вместимости, временный стекуемый инвентарь, подбор на F и HUD из snapshot; протокол v4.
 - **PostgreSQL driver spike для Windows:** собрана и подписана x64 GDExtension с параметризованными запросами, явными ошибками и транзакциями. Изолированный PostgreSQL 18 cluster на `127.0.0.1:55432`, load test и полный spike с параметрами, rollback, commit, recovery и close прошли. DLL локально проверена через `signtool /pa`.
 - **PostgreSQL driver spike для Linux:** собрана x86_64 GDExtension на Ubuntu 26.04; на Godot 4.7.2 прошли load test (`POSTGRES_DRIVER_LOAD_OK`) и полный smoke с PostgreSQL 18.6 (`POSTGRES_DRIVER_SPIKE_OK`). Временный кластер остановлен.
@@ -30,7 +31,7 @@
 
 - **PostgreSQL:** startup и миграции подключены, но CRUD персонажа пока не связан с игровыми сессиями. Login/character-select отложены до выбора защищённого транспорта для учётных данных; пароль нельзя передавать через незашифрованный ENet. До этого уровень и опыт не переживают disconnect.
 - **Phase 5 capabilities:** доступны все 5 способностей warrior с server-authoritative cooldown, range, resource cost и heal/damage validation; игрок получает опыт за убийство и прокачивается в пределах уровней 1–10.
-- **Не завершено в Phase 5:** мини-босс, экипировка, квесты, NPC, торговля и чат.
+- **Не завершено в Phase 5:** экипировка, квесты, NPC, торговля и чат.
 - **Phase 6:** login/character-select и законченный игровой UI ещё не реализованы.
 - **Phase 7:** целевой Linux deployment и нагрузка 50 игроков не проверены.
 - В текущем тестовом sandbox настроены две in-memory зоны; целевой вертикальный срез по промпту должен свестись к одной зоне.
@@ -39,7 +40,7 @@
 
 ### 1. Продолжить игровой вертикальный срез
 
-- Добавить мини-босса и продолжить реализацию экипировки и server-authoritative gameplay.
+- Продолжить реализацию экипировки и server-authoritative gameplay.
 - Реализовать 5 коротких квестов, NPC-диалог, торговца и say/party/system chat.
 - Оставить одну целевую игровую зону; две текущие зоны считать временной сетевой песочницей.
 

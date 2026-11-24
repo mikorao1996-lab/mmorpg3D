@@ -23,7 +23,16 @@ func run() -> bool:
 			or not slime.get("loot_item_ids", []).has("minor_potion"):
 		push_error("Game data registry failed to resolve the mob loot reference")
 		return false
+	var guardian: Dictionary = registries["mobs"].get("training_guardian", {})
+	if guardian.is_empty() or not bool(guardian.get("is_boss", false)):
+		push_error("Game data registry is missing its configured mini-boss")
+		return false
 	var invalid_mob: Dictionary = slime.duplicate(true)
+	invalid_mob["is_boss"] = "false"
+	if GameDataRegistryType.validate_entry("mobs", invalid_mob).is_empty():
+		push_error("Game data registry accepted a non-boolean boss marker")
+		return false
+	invalid_mob["is_boss"] = false
 	invalid_mob["attack_interval_seconds"] = 0.0
 	if GameDataRegistryType.validate_entry("mobs", invalid_mob).is_empty():
 		push_error("Game data registry accepted a zero mob attack interval")

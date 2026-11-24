@@ -39,13 +39,15 @@ func run() -> bool:
 		return false
 	var has_training_slime: bool = false
 	var has_training_wolf: bool = false
+	var has_training_guardian: bool = false
 	for mob_entry: Variant in mob_entries:
 		if not mob_entry is Array or mob_entry.size() < 1:
 			continue
 		has_training_slime = has_training_slime or mob_entry[0] == "training_slime"
 		has_training_wolf = has_training_wolf or mob_entry[0] == "training_wolf"
-	if not has_training_slime or not has_training_wolf:
-		push_error("Server world did not spawn both configured mob types")
+		has_training_guardian = has_training_guardian or mob_entry[0] == "training_guardian"
+	if not has_training_slime or not has_training_wolf or not has_training_guardian:
+		push_error("Server world did not spawn all configured mob types")
 		return false
 
 	var successful_cast: Dictionary = server_world.cast_ability(

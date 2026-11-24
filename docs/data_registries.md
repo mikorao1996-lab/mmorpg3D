@@ -41,6 +41,7 @@ File: `resources/data/abilities.json`
 File: `resources/data/mobs.json`
 
 - `id`, `name_key`: non-empty strings.
+- `is_boss`: boolean that marks a mini-boss for client presentation.
 - `level`: integer >= 1; `experience_reward` is an integer >= 0; `health` > 0.
 - `attack`, `defense`, `move_speed`, `aggro_range`, `attack_range`: finite numbers >= 0.
 - `attack_interval_seconds` and `respawn_seconds`: finite numbers > 0.
@@ -49,7 +50,8 @@ File: `resources/data/mobs.json`
 - `loot_item_ids`: unique item IDs; each must exist in the item registry.
   The combat slice uses spawn/visual fields to initialize and render zone-local
   mobs, and the aggro/attack fields to drive server-authoritative mob AI.
-  Loot IDs are validated, but runtime drops are not implemented yet.
+  Configured loot items drop on defeat; bosses use the same server-authoritative
+  combat and loot rules with their own data-defined stats.
 
 ## Progression
 

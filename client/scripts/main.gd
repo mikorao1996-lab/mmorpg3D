@@ -489,7 +489,11 @@ func _ensure_mob_view(mob_id: String) -> void:
 	capsule.height = float(mob_definition["visual_height"])
 	mesh_instance.mesh = capsule
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.35, 0.78, 0.38)
+	material.albedo_color = (
+		Color(0.78, 0.24, 0.2)
+		if bool(mob_definition["is_boss"])
+		else Color(0.35, 0.78, 0.38)
+	)
 	mesh_instance.material_override = material
 	mesh_instance.position.y = capsule.height / 2.0
 	mob_view.add_child(mesh_instance)
