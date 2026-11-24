@@ -18,6 +18,12 @@ The main client scene is `client/scenes/main.tscn`.
 
 ## Headless server
 
+The server requires `MMORPG3D_DB_HOST`, `MMORPG3D_DB_PORT`,
+`MMORPG3D_DB_NAME`, and `MMORPG3D_DB_USER` in its environment; password is
+optional for local trust-authenticated test clusters. PostgreSQL connectivity
+and migrations are checked before ENet starts. Missing configuration, an
+unavailable database, or a migration error exits the server with code `2`.
+
 ```powershell
 godot --headless --path D:\Dev\mmorpg3D --scene res://server/main/server_main.tscn
 ```
@@ -90,8 +96,10 @@ cooldown.
 
 ## PostgreSQL driver spike
 
-The native extension in `native/postgres` is a synchronous `libpq` smoke-test
-adapter. It is not yet wired into the game server or persistence layer.
+The native extension in `native/postgres` is a synchronous `libpq` adapter.
+The server initializes the database and applies migrations before opening its
+listener. The character repository is not yet wired to live sessions because
+stable character identity and selection are not implemented.
 
 Initialize the `godot-cpp` submodule:
 
@@ -116,11 +124,19 @@ python3 -m SCons -C native/postgres platform=linux target=template_debug arch=x8
 
 The PostgreSQL spike test uses a local database at `127.0.0.1:55432`; run it
 against a temporary local cluster rather than changing the authentication of a
-shared PostgreSQL service:
+shared PostgreSQL service. The character repository test applies migrations
+and writes a fixture, so run both tests only against a disposable test cluster:
 
 ```powershell
 $env:PATH = "$env:POSTGRESQL_PATH\bin;$env:PATH"
 & 'D:\Dev\Godot_v4.7.2-stable_win64.exe' --headless --path . --script tests/integration/postgres_driver_spike.gd
+& 'D:\Dev\Godot_v4.7.2-stable_win64.exe' --headless --path . --script tests/integration/postgres_character_repository_test.gd
+```
+
+On Linux, with the temporary cluster listening on the same address and port:
+
+```sh
+godot --headless --path /path/to/mmorpg3D --script res://tests/integration/postgres_character_repository_test.gd
 ```
 
 To check that the extension loads and reports an unavailable database without

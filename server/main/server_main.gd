@@ -3,9 +3,11 @@ extends Node
 const PROJECT_LOGGER: GDScript = preload("res://shared/logging/project_logger.gd")
 const SimulationConfigType: GDScript = preload("res://shared/data/simulation_config.gd")
 const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
+const DatabaseBootstrapType: GDScript = preload("res://server/db/database_bootstrap.gd")
 
 var server_listener: RefCounted
 var server_world: RefCounted
+var database_connection: RefCounted
 var game_data_registry: Dictionary = {}
 
 
@@ -26,6 +28,17 @@ func _ready() -> void:
 		get_tree().quit(2)
 		return
 
+	var database_result: Dictionary = DatabaseBootstrapType.new().connect_and_migrate()
+	if not bool(database_result.get("ok", false)):
+		PROJECT_LOGGER.log_error(
+			"Server database initialization failed: %s"
+			% str(database_result.get("error", "Unknown database error.")),
+		)
+		get_tree().quit(2)
+		return
+	database_connection = database_result["connection"]
+	PROJECT_LOGGER.log_info("PostgreSQL connection and migrations are ready")
+
 	PROJECT_LOGGER.log_info("Server bootstrap initialized")
 	server_listener = load("res://server/net/server_listener.gd").new()
 	server_world = load("res://server/world/server_world.gd").new(
@@ -39,6 +52,12 @@ func _ready() -> void:
 	server_listener.ability_cast_requested.connect(_on_ability_cast_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
+
+
+func _exit_tree() -> void:
+	if database_connection != null:
+		database_connection.call("close_connection")
+		database_connection = null
 
 
 func _process(delta: float) -> void:
