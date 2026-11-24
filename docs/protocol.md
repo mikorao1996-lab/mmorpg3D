@@ -2,7 +2,7 @@
 
 ## Bootstrap protocol constants
 
-- Protocol version: `2`
+- Protocol version: `3`
 - Snapshot channel: `0`, unreliable.
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
@@ -43,10 +43,17 @@ Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 `MOVE_INPUT` payloads contain a `direction` Vector2; the server validates its
 magnitude and applies it during the fixed simulation step. `WORLD_SNAPSHOT`
 payloads contain `zone_id`, `server_time_ms` and a `players` array of
-`[peer_id, position, health, max_health]` entries. Each snapshot is filtered to
-the configured interest radius around its recipient and always includes that
-recipient. The current default radius is `10` world units in
+`[peer_id, position, health, max_health, level, experience, resource,
+max_resource, attack_multiplier, defense]` entries. Each snapshot is filtered
+to the configured interest radius around its recipient and always includes
+that recipient. The current default radius is `10` world units in
 `resources/data/simulation.json`.
+
+Progression is server-authoritative. Killing a mob awards its configured
+`experience_reward`; level thresholds and derived stats are loaded from
+`resources/data/progression.json`. Stats update on the next snapshot. At the
+level cap, further experience does not raise the level. Level and experience
+are session-only until a secure account/character identity is implemented.
 
 `ZONE_TRANSFER` requests contain a configured `zone_id`. Only authenticated
 peers can request a transfer. The server replies reliably with

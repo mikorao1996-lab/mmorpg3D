@@ -1,7 +1,7 @@
 class_name ProtocolConstants
 extends RefCounted
 
-const PROTOCOL_VERSION: int = 2
+const PROTOCOL_VERSION: int = 3
 const SNAPSHOT_CHANNEL: int = 0
 const EVENT_CHANNEL: int = 1
 const ENET_USER_CHANNEL_OFFSET: int = 1

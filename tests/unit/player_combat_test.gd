@@ -24,8 +24,8 @@ func run() -> bool:
 		push_error("Mob did not pursue a player inside its configured aggro range")
 		return false
 
-	config["player_max_health"] = 40.0
 	config["player_respawn_seconds"] = 0.1
+	game_data["progression"]["level_1"]["max_health"] = 40.0
 	var slime: Dictionary = game_data["mobs"]["training_slime"]
 	slime["attack"] = 25.0
 	slime["attack_range"] = 6.0
@@ -86,6 +86,6 @@ func _get_player_entry(server_world: RefCounted) -> Array:
 		return []
 	var player_entries: Array = snapshots[1]["players"]
 	for entry: Variant in player_entries:
-		if entry is Array and entry.size() == 4 and entry[0] == 1:
+		if entry is Array and entry.size() == 10 and entry[0] == 1:
 			return entry
 	return []

@@ -1,7 +1,8 @@
 # Game data registries
 
 The server loads all registries through `GameDataRegistry.load_all()` before
-opening its ENet listener. Files use a versioned root object:
+opening its ENet listener. Item, ability, mob, quest, and progression files use
+a versioned root object:
 
 ```json
 {
@@ -40,7 +41,7 @@ File: `resources/data/abilities.json`
 File: `resources/data/mobs.json`
 
 - `id`, `name_key`: non-empty strings.
-- `level`: integer >= 1; `health` > 0.
+- `level`: integer >= 1; `experience_reward` is an integer >= 0; `health` > 0.
 - `attack`, `defense`, `move_speed`, `aggro_range`, `attack_range`: finite numbers >= 0.
 - `attack_interval_seconds` and `respawn_seconds`: finite numbers > 0.
 - `spawn_position`: three finite numeric coordinates; `visual_radius` and
@@ -48,6 +49,20 @@ File: `resources/data/mobs.json`
 - `loot_item_ids`: unique item IDs; each must exist in the item registry.
   The combat slice uses spawn/visual fields to initialize and render zone-local
   mobs, and the aggro/attack fields to drive server-authoritative mob AI.
+  Loot IDs are validated, but runtime drops are not implemented yet.
+
+## Progression
+
+File: `resources/data/progression.json`
+
+- Defines exactly ten contiguous levels, `level_1` through `level_10`.
+- `experience_required` is the cumulative experience required to reach a level;
+  level 1 starts at zero and later thresholds must strictly increase.
+- `max_health`, `max_resource`, and `attack_multiplier` are finite numbers > 0;
+  `defense` is a finite number >= 0.
+- On level-up, maximum stats and combat multipliers change according to the
+  table, while current health/resource percentages are preserved. Experience
+  and level are currently session-only and are not persisted across disconnects.
 
 ## Quests
 
@@ -63,7 +78,6 @@ File: `resources/data/quests.json`
   registry is not defined yet.
 
 `GameDataRegistry.load_all()` returns dictionaries keyed by entry ID under
-`items`, `abilities`, `mobs`, and `quests`. These are initial schema contracts;
-database persistence and runtime gameplay systems are separate Phase 4/5 work.
-Mob loot item IDs are validated as references; authoritative loot drops are
-not implemented yet.
+`items`, `abilities`, `mobs`, `progression`, and `quests`. These are initial
+schema contracts; database persistence and runtime gameplay systems are
+separate Phase 4/5 work.

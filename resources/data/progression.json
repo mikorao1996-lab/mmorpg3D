@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "level_1",
+      "level": 1,
+      "experience_required": 0,
+      "max_health": 100,
+      "max_resource": 100,
+      "attack_multiplier": 1.0,
+      "defense": 0
+    },
+    {
+      "id": "level_2",
+      "level": 2,
+      "experience_required": 80,
+      "max_health": 110,
+      "max_resource": 105,
+      "attack_multiplier": 1.05,
+      "defense": 0.5
+    },
+    {
+      "id": "level_3",
+      "level": 3,
+      "experience_required": 200,
+      "max_health": 120,
+      "max_resource": 110,
+      "attack_multiplier": 1.1,
+      "defense": 1.0
+    },
+    {
+      "id": "level_4",
+      "level": 4,
+      "experience_required": 360,
+      "max_health": 130,
+      "max_resource": 115,
+      "attack_multiplier": 1.15,
+      "defense": 1.5
+    },
+    {
+      "id": "level_5",
+      "level": 5,
+      "experience_required": 560,
+      "max_health": 140,
+      "max_resource": 120,
+      "attack_multiplier": 1.2,
+      "defense": 2.0
+    },
+    {
+      "id": "level_6",
+      "level": 6,
+      "experience_required": 800,
+      "max_health": 150,
+      "max_resource": 125,
+      "attack_multiplier": 1.25,
+      "defense": 2.5
+    },
+    {
+      "id": "level_7",
+      "level": 7,
+      "experience_required": 1080,
+      "max_health": 160,
+      "max_resource": 130,
+      "attack_multiplier": 1.3,
+      "defense": 3.0
+    },
+    {
+      "id": "level_8",
+      "level": 8,
+      "experience_required": 1400,
+      "max_health": 170,
+      "max_resource": 135,
+      "attack_multiplier": 1.35,
+      "defense": 3.5
+    },
+    {
+      "id": "level_9",
+      "level": 9,
+      "experience_required": 1760,
+      "max_health": 180,
+      "max_resource": 140,
+      "attack_multiplier": 1.4,
+      "defense": 4.0
+    },
+    {
+      "id": "level_10",
+      "level": 10,
+      "experience_required": 2160,
+      "max_health": 190,
+      "max_resource": 145,
+      "attack_multiplier": 1.45,
+      "defense": 4.5
+    }
+  ]
+}

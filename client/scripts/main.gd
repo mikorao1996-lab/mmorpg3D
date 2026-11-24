@@ -190,21 +190,41 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var positions: Dictionary = {}
 	var player_health_states: Dictionary = {}
 	for entry: Variant in player_entries:
-		if not entry is Array or entry.size() != 4:
+		if not entry is Array or entry.size() != 10:
 			push_warning("Rejected malformed player entry in world snapshot")
 			return
 		var player_id: Variant = entry[0]
 		var position: Variant = entry[1]
 		var health: Variant = entry[2]
 		var max_health: Variant = entry[3]
+		var level: Variant = entry[4]
+		var experience: Variant = entry[5]
+		var resource: Variant = entry[6]
+		var max_resource: Variant = entry[7]
+		var attack_multiplier: Variant = entry[8]
+		var defense: Variant = entry[9]
 		if (
 			player_id is not int
 			or position is not Vector3
 			or not _is_finite_number(health)
 			or not _is_finite_number(max_health)
+			or level is not int
+			or experience is not int
+			or experience < 0
+			or not _is_finite_number(resource)
+			or not _is_finite_number(max_resource)
+			or not _is_finite_number(attack_multiplier)
+			or not _is_finite_number(defense)
 			or float(max_health) <= 0.0
+			or level < 1
+			or level > _game_data_registry["progression"].size()
+			or float(max_resource) <= 0.0
+			or float(attack_multiplier) <= 0.0
+			or float(defense) < 0.0
 			or float(health) < 0.0
 			or float(health) > float(max_health)
+			or float(resource) < 0.0
+			or float(resource) > float(max_resource)
 		):
 			push_warning("Rejected malformed player state in world snapshot")
 			return
@@ -212,6 +232,12 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		player_health_states[player_id] = {
 			"health": float(health),
 			"max_health": float(max_health),
+			"level": level,
+			"experience": int(experience),
+			"resource": float(resource),
+			"max_resource": float(max_resource),
+			"attack_multiplier": float(attack_multiplier),
+			"defense": float(defense),
 		}
 		_ensure_player_view(player_id)
 		if player_id == _local_player_id and not _has_authoritative_position:
@@ -391,8 +417,12 @@ func _update_combat_status() -> void:
 	var mob_definition: Dictionary = _game_data_registry["mobs"][mob_id]
 	var player_state: Dictionary = _player_health_states[_local_player_id]
 	status_label.text = tr("combat_status") % [
+		int(player_state["level"]),
+		int(player_state["experience"]),
 		int(player_state["health"]),
 		int(player_state["max_health"]),
+		int(player_state["resource"]),
+		int(player_state["max_resource"]),
 		tr(mob_definition["name_key"]),
 		int(_mob_states[mob_id]["health"]),
 		int(_mob_states[mob_id]["max_health"]),

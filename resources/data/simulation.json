@@ -2,8 +2,6 @@
   "zone_ids": ["starter", "dungeon"],
   "simulation_step_seconds": 0.05,
   "movement_speed": 4.0,
-  "player_max_health": 100,
-  "player_max_resource": 100,
   "player_respawn_seconds": 3.0,
   "max_input_magnitude": 1.0,
   "world_half_extent": 11.0,

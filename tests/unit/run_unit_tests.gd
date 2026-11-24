@@ -7,6 +7,7 @@ const ServerWorldTest: GDScript = preload("res://tests/unit/server_world_test.gd
 const GameDataRegistryTest: GDScript = preload("res://tests/unit/game_data_registry_test.gd")
 const CombatSystemTest: GDScript = preload("res://tests/unit/combat_system_test.gd")
 const PlayerCombatTest: GDScript = preload("res://tests/unit/player_combat_test.gd")
+const CharacterProgressionTest: GDScript = preload("res://tests/unit/character_progression_test.gd")
 
 
 func _initialize() -> void:
@@ -29,6 +30,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not PlayerCombatTest.new().run():
+		quit(1)
+		return
+	if not CharacterProgressionTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

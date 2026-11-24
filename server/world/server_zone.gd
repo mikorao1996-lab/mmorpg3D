@@ -5,8 +5,6 @@ const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simu
 
 var zone_id: String
 var _movement_speed: float
-var _player_max_health: float
-var _player_max_resource: float
 var _player_respawn_seconds: float
 var _max_input_magnitude: float
 var _world_half_extent: float
@@ -19,6 +17,7 @@ var _simulation_accumulator: float = 0.0
 var _snapshot_accumulator: float = 0.0
 var _next_spawn_index: int = 0
 var _mob_definitions: Dictionary = {}
+var _progression_definitions: Dictionary = {}
 var _mobs: Dictionary = {}
 
 
@@ -29,8 +28,6 @@ func _init(
 ) -> void:
 	zone_id = configured_zone_id
 	_movement_speed = float(config["movement_speed"])
-	_player_max_health = float(config["player_max_health"])
-	_player_max_resource = float(config["player_max_resource"])
 	_player_respawn_seconds = float(config["player_respawn_seconds"])
 	_max_input_magnitude = float(config["max_input_magnitude"])
 	_world_half_extent = float(config["world_half_extent"])
@@ -39,6 +36,7 @@ func _init(
 	_simulation_step_seconds = float(config["simulation_step_seconds"])
 	_snapshot_interval_seconds = float(config["snapshot_interval_seconds"])
 	_mob_definitions = game_data_registry["mobs"]
+	_progression_definitions = game_data_registry["progression"]
 	for mob_id: String in _mob_definitions:
 		var definition: Dictionary = _mob_definitions[mob_id]
 		var spawn_position: Array = definition["spawn_position"]
@@ -70,14 +68,7 @@ func add_player(peer_id: int) -> void:
 func add_player_at(peer_id: int, position: Vector3) -> void:
 	if _players.has(peer_id):
 		return
-	_players[peer_id] = {
-		"position": position,
-		"spawn_position": position,
-		"input": Vector2.ZERO,
-		"health": _player_max_health,
-		"resource": _player_max_resource,
-		"respawn_remaining_seconds": 0.0,
-	}
+	_players[peer_id] = _create_player_state(position)
 
 
 func add_player_with_state(peer_id: int, player_state: Dictionary) -> void:
@@ -107,6 +98,31 @@ func get_player_state(peer_id: int) -> Dictionary:
 	return _players[peer_id].duplicate(true)
 
 
+func award_experience(peer_id: int, amount: int) -> Dictionary:
+	if not _players.has(peer_id):
+		return {"ok": false, "error": "Player is not in this zone."}
+	if amount < 0:
+		return {"ok": false, "error": "Experience award must not be negative."}
+
+	var player_state: Dictionary = _players[peer_id]
+	player_state["experience"] = int(player_state["experience"]) + amount
+	var old_level: int = int(player_state["level"])
+	var max_level: int = _progression_definitions.size()
+	while int(player_state["level"]) < max_level:
+		var next_level: int = int(player_state["level"]) + 1
+		var next_definition: Dictionary = _progression_definitions["level_%d" % next_level]
+		if int(player_state["experience"]) < int(next_definition["experience_required"]):
+			break
+		_apply_level_definition(player_state, next_definition)
+
+	return {
+		"ok": true,
+		"leveled_up": int(player_state["level"]) > old_level,
+		"level": int(player_state["level"]),
+		"experience": int(player_state["experience"]),
+	}
+
+
 func spend_player_resource(peer_id: int, cost: float) -> bool:
 	if not _players.has(peer_id) or not is_finite(cost) or cost < 0.0:
 		return false
@@ -126,7 +142,7 @@ func heal_player(peer_id: int, amount: float) -> bool:
 	if float(player_state["health"]) <= 0.0:
 		return false
 	player_state["health"] = minf(
-		_player_max_health,
+		float(player_state["max_health"]),
 		float(player_state["health"]) + amount,
 	)
 	return true
@@ -138,7 +154,11 @@ func damage_player(peer_id: int, damage: float) -> bool:
 	var player_state: Dictionary = _players[peer_id]
 	if float(player_state["health"]) <= 0.0:
 		return false
-	player_state["health"] = maxf(0.0, float(player_state["health"]) - damage)
+	var effective_damage: float = maxf(
+		0.0,
+		damage - float(player_state["defense"]),
+	)
+	player_state["health"] = maxf(0.0, float(player_state["health"]) - effective_damage)
 	if float(player_state["health"]) == 0.0:
 		player_state["input"] = Vector2.ZERO
 		player_state["respawn_remaining_seconds"] = _player_respawn_seconds
@@ -163,9 +183,13 @@ func damage_mob(mob_id: String, damage: float) -> bool:
 	var mob_state: Dictionary = _mobs[mob_id]
 	if float(mob_state["health"]) <= 0.0:
 		return false
-	mob_state["health"] = maxf(0.0, float(mob_state["health"]) - damage)
+	var definition: Dictionary = _mob_definitions[mob_id]
+	var effective_damage: float = maxf(
+		0.0,
+		damage - float(definition["defense"]),
+	)
+	mob_state["health"] = maxf(0.0, float(mob_state["health"]) - effective_damage)
 	if float(mob_state["health"]) == 0.0:
-		var definition: Dictionary = _mob_definitions[mob_id]
 		mob_state["respawn_remaining_seconds"] = float(definition["respawn_seconds"])
 	return true
 
@@ -288,8 +312,8 @@ func _advance_player_respawns() -> void:
 			float(player_state["respawn_remaining_seconds"]) - _simulation_step_seconds,
 		)
 		if float(player_state["respawn_remaining_seconds"]) == 0.0:
-			player_state["health"] = _player_max_health
-			player_state["resource"] = _player_max_resource
+			player_state["health"] = player_state["max_health"]
+			player_state["resource"] = player_state["max_resource"]
 			player_state["position"] = player_state["spawn_position"]
 			player_state["input"] = Vector2.ZERO
 
@@ -319,7 +343,13 @@ func _create_snapshot_for(observer_id: int) -> Dictionary:
 				peer_id,
 				player_position,
 				player_state["health"],
-				_player_max_health,
+				player_state["max_health"],
+				player_state["level"],
+				player_state["experience"],
+				player_state["resource"],
+				player_state["max_resource"],
+				player_state["attack_multiplier"],
+				player_state["defense"],
 			])
 	var mob_ids: Array = _mobs.keys()
 	mob_ids.sort()
@@ -339,3 +369,38 @@ func _create_snapshot_for(observer_id: int) -> Dictionary:
 		"players": player_states,
 		"mobs": mob_states,
 	}
+
+
+func _create_player_state(position: Vector3) -> Dictionary:
+	var initial_definition: Dictionary = _progression_definitions["level_1"]
+	return {
+		"position": position,
+		"spawn_position": position,
+		"input": Vector2.ZERO,
+		"health": float(initial_definition["max_health"]),
+		"max_health": float(initial_definition["max_health"]),
+		"resource": float(initial_definition["max_resource"]),
+		"max_resource": float(initial_definition["max_resource"]),
+		"level": 1,
+		"experience": 0,
+		"attack_multiplier": float(initial_definition["attack_multiplier"]),
+		"defense": float(initial_definition["defense"]),
+		"respawn_remaining_seconds": 0.0,
+	}
+
+
+func _apply_level_definition(
+	player_state: Dictionary,
+	level_definition: Dictionary,
+) -> void:
+	var health_ratio: float = float(player_state["health"]) / float(player_state["max_health"])
+	var resource_ratio: float = (
+		float(player_state["resource"]) / float(player_state["max_resource"])
+	)
+	player_state["level"] = int(level_definition["level"])
+	player_state["max_health"] = float(level_definition["max_health"])
+	player_state["max_resource"] = float(level_definition["max_resource"])
+	player_state["health"] = float(player_state["max_health"]) * health_ratio
+	player_state["resource"] = float(player_state["max_resource"]) * resource_ratio
+	player_state["attack_multiplier"] = float(level_definition["attack_multiplier"])
+	player_state["defense"] = float(level_definition["defense"])

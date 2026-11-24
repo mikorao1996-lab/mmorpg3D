@@ -138,7 +138,10 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 	):
 		result["reason"] = "out_of_range"
 		return result
-	if not zone.damage_mob(target_mob_id, float(ability["magnitude"])):
+	var damage: float = (
+		float(ability["magnitude"]) * float(player_state["attack_multiplier"])
+	)
+	if not zone.damage_mob(target_mob_id, damage):
 		result["reason"] = "target_dead"
 		return result
 	if not zone.spend_player_resource(peer_id, ability_resource_cost):
@@ -148,6 +151,17 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 	player_cooldowns[ability_id] = now_ms + ceili(float(ability["cooldown_seconds"]) * 1000.0)
 	_ability_ready_at_ms[peer_id] = player_cooldowns
 	var updated_target_state: Dictionary = zone.get_mob_state(target_mob_id)
+	if float(updated_target_state["health"]) == 0.0:
+		var mob_definition: Dictionary = _game_data_registry["mobs"][target_mob_id]
+		var experience_result: Dictionary = zone.award_experience(
+			peer_id,
+			int(mob_definition["experience_reward"]),
+		)
+		if not bool(experience_result.get("ok", false)):
+			push_error(
+				"Could not award experience to peer %d: %s"
+				% [peer_id, str(experience_result.get("error", "Unknown error."))],
+			)
 	result["accepted"] = true
 	result["health"] = updated_target_state["health"]
 	result["max_health"] = updated_target_state["max_health"]

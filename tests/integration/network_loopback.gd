@@ -20,6 +20,10 @@ var mismatch_rejected: bool = false
 var saw_two_players: bool = false
 var local_position_seen: bool = false
 var local_player_moved: bool = false
+var second_movement_sent: bool = false
+var second_out_of_range_position: bool = false
+var second_last_x: float = -INF
+var second_target_distance: float = -1.0
 var zone_transfer_applied: bool = false
 var zone_transfer_accepted: bool = false
 var invalid_zone_request_sent: bool = false
@@ -50,6 +54,9 @@ func _ready() -> void:
 	if _game_data_registry.is_empty():
 		get_tree().quit(1)
 		return
+	var test_slime: Dictionary = _game_data_registry["mobs"]["training_slime"]
+	test_slime["spawn_position"] = [1.5, 0.0, -1.5]
+	test_slime["aggro_range"] = 0.0
 
 	listener = load("res://server/net/server_listener.gd").new()
 	if not listener.start(7790):
@@ -117,6 +124,16 @@ func _process(delta: float) -> void:
 			return
 		movement_sent = true
 
+	if second_valid_accepted and not second_movement_sent:
+		var second_movement_error: Error = second_valid_client.send_movement_intent(
+			Vector2.RIGHT,
+		)
+		if second_movement_error != OK:
+			push_error("Failed to send second loopback movement intent: %s" % second_movement_error)
+			get_tree().quit(1)
+			return
+		second_movement_sent = true
+
 	if valid_accepted and not primary_cast_sent:
 		var cast_error: Error = valid_client.request_ability_cast(
 			"starter_slash",
@@ -150,7 +167,11 @@ func _process(delta: float) -> void:
 			return
 		heavy_strike_cast_sent = true
 
-	if second_valid_accepted and not out_of_range_cast_sent:
+	if (
+		second_valid_accepted
+		and second_out_of_range_position
+		and not out_of_range_cast_sent
+	):
 		var range_error: Error = second_valid_client.request_ability_cast(
 			"starter_slash",
 			"training_slime",
@@ -166,6 +187,7 @@ func _process(delta: float) -> void:
 		and second_valid_accepted
 		and saw_two_players
 		and local_player_moved
+		and second_out_of_range_position
 		and not zone_transfer_sent
 	):
 		var transfer_error: Error = second_valid_client.request_zone_transfer("dungeon")
@@ -207,7 +229,7 @@ func _process(delta: float) -> void:
 		print("COMBAT_LOOPBACK_OK")
 		get_tree().quit(0)
 	elif elapsed_seconds > 5.0:
-		print("ZONE_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s zone_sent=%s zone_applied=%s zone_accepted=%s invalid_zone=%s combat=%s cooldown=%s heavy=%s out_of_range=%s isolated=%s/%s player_id=%d second_player_id=%d" % [
+		print("ZONE_TEST_STATE accepted=%s second_accepted=%s rejected=%s two_players=%s moved=%s movement_sent=%s zone_sent=%s zone_applied=%s zone_accepted=%s invalid_zone=%s combat=%s cooldown=%s heavy=%s out_of_range=%s isolated=%s/%s player_id=%d second_player_id=%d second_x=%f target_distance=%f" % [
 			valid_accepted,
 			second_valid_accepted,
 			mismatch_rejected,
@@ -226,6 +248,8 @@ func _process(delta: float) -> void:
 			second_isolated_in_dungeon,
 			valid_player_id,
 			second_player_id,
+			second_last_x,
+			second_target_distance,
 		])
 		push_error("ZONE_LOOPBACK_TIMEOUT")
 		get_tree().quit(1)
@@ -303,10 +327,11 @@ func _process_world_snapshot(snapshot: Dictionary, track_local_player: bool) -> 
 			and _snapshot_has_player(player_states, second_player_id)
 		)
 	if not track_local_player:
+		_update_second_player_range_state(snapshot, player_states)
 		return
 
 	for state: Variant in player_states:
-		if not state is Array or state.size() != 4:
+		if not state is Array or state.size() != 10:
 			continue
 		if state[0] != valid_player_id or not state[1] is Vector3:
 			continue
@@ -330,6 +355,45 @@ func _process_world_snapshot(snapshot: Dictionary, track_local_player: bool) -> 
 		local_player_moved = (
 			current_position.distance_to(initial_local_position) > movement_threshold
 		)
+
+
+func _update_second_player_range_state(
+	snapshot: Dictionary,
+	player_states: Array,
+) -> void:
+	var second_position: Vector3
+	var found_second_player: bool = false
+	for state: Variant in player_states:
+		if (
+			state is Array
+			and state.size() == 10
+			and state[0] == second_player_id
+			and state[1] is Vector3
+		):
+			second_position = state[1]
+			found_second_player = true
+			break
+	if not found_second_player:
+		return
+
+	var mob_entries: Variant = snapshot.get("mobs", null)
+	if not mob_entries is Array:
+		return
+	for mob_entry: Variant in mob_entries:
+		if (
+			not mob_entry is Array
+			or mob_entry.size() < 2
+			or mob_entry[0] != "training_slime"
+			or mob_entry[1] is not Vector3
+		):
+			continue
+		var ability_range: float = float(
+			_game_data_registry["abilities"]["starter_slash"]["range"],
+		)
+		second_last_x = second_position.x
+		second_target_distance = second_position.distance_to(mob_entry[1])
+		second_out_of_range_position = second_target_distance > ability_range
+		return
 
 
 func _on_movement_intent(peer_id: int, input_direction: Vector2) -> void:

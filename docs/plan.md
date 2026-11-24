@@ -16,34 +16,33 @@
 - **Phase 0–1:** проект и headless bootstrap клиента/сервера; проект проверен на Godot 4.7.2.
 - **Phase 2:** ENet handshake, версия протокола, codec, reliable events и unreliable snapshots.
 - **Phase 3:** серверная симуляция движения, prediction/interpolation, AOI, отключение сущностей и тестовые zone transfer.
-- **Phase 4 — JSON:** versioned registries items/abilities/mobs/quests, загрузка и валидация данных на старте.
-- **Phase 5 — основа боя:** `starter_slash` и `heavy_strike`, training slime и training wolf с серверным aggro/chase/attack, здоровье игрока, смерть и респавн; локализованный HUD.
+- **Phase 4 — JSON:** versioned registries items/abilities/mobs/progression/quests, загрузка и валидация данных на старте.
+- **Phase 5 — основа боя:** `starter_slash` и `heavy_strike`, training slime и training wolf с серверным aggro/chase/attack, уровни 1–10 с опытом за убийства и серверными характеристиками, здоровье игрока, смерть и респавн; локализованный HUD.
 - **PostgreSQL driver spike для Windows:** собрана и подписана x64 GDExtension с параметризованными запросами, явными ошибками и транзакциями. Изолированный PostgreSQL 18 cluster на `127.0.0.1:55432`, load test и полный spike с параметрами, rollback, commit, recovery и close прошли. DLL локально проверена через `signtool /pa`.
 - **PostgreSQL driver spike для Linux:** собрана x86_64 GDExtension на Ubuntu 26.04; на Godot 4.7.2 прошли load test (`POSTGRES_DRIVER_LOAD_OK`) и полный smoke с PostgreSQL 18.6 (`POSTGRES_DRIVER_SPIKE_OK`). Временный кластер остановлен.
 - **Основа PostgreSQL-персистентности:** добавлены versioned migration, character repository для create/load/save и интеграционный тест миграции, повторного применения, round-trip, валидации и явного отказа без соединения с БД.
 - **Database startup:** сервер читает DB settings из окружения, применяет миграции до запуска ENet и завершается с ошибкой при отсутствующей конфигурации, недоступной БД или ошибке миграции.
 
-Базовая проверенная версия — commit `86d82af`. На Godot 4.7.2 проходят импорт, unit-тесты (`UNIT_TESTS_OK`) и сетевой loopback (`COMBAT_LOOPBACK_OK`). Windows- и Linux-проверки PostgreSQL-драйвера проходят (`POSTGRES_DRIVER_LOAD_OK`, `POSTGRES_DRIVER_SPIKE_OK`).
+На Godot 4.7.2 проходят unit-тесты (`UNIT_TESTS_OK`) и сетевой loopback (`COMBAT_LOOPBACK_OK`). Windows- и Linux-проверки PostgreSQL-драйвера проходят (`POSTGRES_DRIVER_LOAD_OK`, `POSTGRES_DRIVER_SPIKE_OK`).
 
 ### Не завершено
 
-- **PostgreSQL:** startup и миграции подключены, но CRUD персонажа пока не связан с игровыми сессиями. Login/character-select отложены до выбора защищённого транспорта для учётных данных; пароль нельзя передавать через незашифрованный ENet.
-- **Phase 5 capabilities:** доступны все 5 способностей warrior с server-authoritative cooldown, range, resource cost и heal/damage validation; training slime и здоровье/респавн игрока реализованы.
-- **Не завершено в Phase 5:** уровни и полный набор характеристик, мини-босс, runtime-лут, инвентарь, экипировка, квесты, NPC, торговля и чат.
+- **PostgreSQL:** startup и миграции подключены, но CRUD персонажа пока не связан с игровыми сессиями. Login/character-select отложены до выбора защищённого транспорта для учётных данных; пароль нельзя передавать через незашифрованный ENet. До этого уровень и опыт не переживают disconnect.
+- **Phase 5 capabilities:** доступны все 5 способностей warrior с server-authoritative cooldown, range, resource cost и heal/damage validation; игрок получает опыт за убийство и прокачивается в пределах уровней 1–10.
+- **Не завершено в Phase 5:** мини-босс, runtime-лут, инвентарь, экипировка, квесты, NPC, торговля и чат.
 - **Phase 6:** login/character-select и законченный игровой UI ещё не реализованы.
 - **Phase 7:** целевой Linux deployment и нагрузка 50 игроков не проверены.
 - В текущем тестовом sandbox настроены две in-memory зоны; целевой вертикальный срез по промпту должен свестись к одной зоне.
 
 ## Следующие задачи по приоритету
 
-### 1. Завершить игровой вертикальный срез
+### 1. Продолжить игровой вертикальный срез
 
-- Расширить серверные характеристики и уровни 1–10 поверх уже завершённых пяти data-driven способностей.
 - Добавить мини-босса и server-authoritative loot; затем небольшой инвентарь и экипировку.
 - Реализовать 5 коротких квестов, NPC-диалог, торговца и say/party/system chat.
 - Оставить одну целевую игровую зону; две текущие зоны считать временной сетевой песочницей.
 
-В `resources/data/mobs.json` настроены два типа мобов; runtime loot ещё не реализован.
+В `resources/data/progression.json` заданы пороги опыта и характеристики уровней; значения баланса остаются data-driven.
 
 Docker необязателен; PostgreSQL остаётся обязательным, SQLite не является заменой.
 
@@ -63,5 +62,5 @@ Docker необязателен; PostgreSQL остаётся обязатель�
 - Сервер остаётся авторитетным; клиент отправляет намерения, а не результаты боя или инвентаря.
 - Docker — необязательный инструмент запуска, но PostgreSQL остаётся требованием целевого scope.
 - Клиентское/серверное подключение к БД не считать реализованным до проверки драйвера на обеих ОС.
-- Protocol version: `2`; при несовместимом изменении сетевой схемы обновлять версию и интеграционные тесты.
+- Protocol version: `3`; при несовместимом изменении сетевой схемы обновлять версию и интеграционные тесты.
 - Числа баланса и поведения брать из конфигурации/JSON, не добавлять игровые значения в логику клиента.
