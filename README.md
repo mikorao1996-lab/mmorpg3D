@@ -8,6 +8,13 @@ Godot 4 MMORPG vertical-slice project.
 - Windows for the editor/client
 - Linux for the server target; Docker is optional
 
+## Project documents
+
+- [docs/plan.md](./docs/plan.md) — roadmap, current state, and the handoff for the next session
+- [docs/protocol.md](./docs/protocol.md) — network protocol, opcodes, and snapshot format
+- [docs/data_registries.md](./docs/data_registries.md) — schemas of the JSON game data registries
+- [docs/architecture.md](./docs/architecture.md) — module overview
+
 ## Client
 
 ```powershell
