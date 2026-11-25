@@ -127,8 +127,22 @@ File: `resources/data/simulation.json`
 - `chat_player_name_max_length`: integer > 0; the longest display name the
   server accepts in the handshake.
 - `party_max_size`: integer > 0; the number of members a party may have.
-- The remaining keys configure the simulation step, the movement, the interest
-  radius, the snapshot rate, and the inventory size.
+- `world_half_extent`: the half size of the playable area; the movement
+  simulation clamps the player to it.
+- `interest_radius`: the radius around a player in which the server sends the
+  mobs, the NPCs, and the drops.
+- `terrain_seed` and `prop_seed`: the seeds of the generated landscape; every
+  client shows the same terrain and the same props.
+- `terrain_extent`: the half size of the generated terrain mesh.
+- `terrain_height`: the highest hill of the terrain.
+- `terrain_hub_radius`: the radius around the spawn point that stays flat, so
+  the player, the NPCs, and the first mobs stand on level ground.
+- `terrain_resolution`: the number of quads per side of the terrain mesh.
+- `prop_radius`: the radius around the hub in which the trees and the rocks
+  are placed.
+- `tree_count` and `rock_count`: the number of trees and rocks of the map.
+- The remaining keys configure the simulation step, the movement, the snapshot
+  rate, and the inventory size.
 
 ## Vendors
 

@@ -63,8 +63,19 @@ adapter: the shared movement simulation still determines target positions, while
 remote players are interpolated from snapshots. Player collision layers are
 disabled until collision rules are authoritative on the server.
 
-Each zone contains the configured training slime. **SPACE** uses `starter_slash`
-and **E** uses `heavy_strike` on the nearest living mob. **Q** uses
+The world is a generated landscape: a heightmap terrain with rolling hills
+around a flat hub, a forest of trees, and rocks. The terrain and the props are
+built from a fixed seed, so every client shows the same map, and they are
+decoration only — they never touch the server state. The playable area is
+`world_half_extent` units around the spawn point, and the server sends the
+mobs, the NPCs, and the drops of the `interest_radius` around a player.
+
+Every player carries a nameplate above the head with the level of the
+character, a bar for the health, and a bar for the resource. The panels of the
+interface can be hidden: **I** toggles the inventory panel, **C** toggles the
+chat panel.
+
+Each zone contains the configured training slime. **SPACE** uses `starter_slash`and **E** uses `heavy_strike` on the nearest living mob. **Q** uses
 `guard_break`, **R** uses `whirlwind`, and **T** uses `second_wind`. The server
 enforces target, range, damage/heal, resource cost, and separate cooldowns. Mob health is
 shown in the status panel, and a defeated mob respawns after its configured
@@ -174,6 +185,11 @@ The fifth integration scene starts two production client scenes against one
 in-process server and walks the social loop: a zone message reaches the other
 player, an invitation creates a party, a party message reaches the members,
 and a party message no longer reaches the player that left the party.
+
+The sixth integration scene checks the landscape and the interface against the
+production client scene: the terrain and the props are built, the flat ground
+of the scene is replaced, the nameplate of a player shows the level and the
+bars, and the inventory and the chat panel can be hidden and shown again.
 
 ## PostgreSQL driver spike
 

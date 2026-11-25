@@ -1,6 +1,8 @@
 keys,en,ru
 bootstrap_ready,"mmorpg3D client bootstrap is ready","mmorpg3D: клиент успешно запущен"
-controls_hint,"WASD: move | SPACE: Quick Slash | E: Heavy Strike | F: Loot | V: Talk to NPC | Chat panel: write and press Enter | Gear panel: equip / unequip / use items","WASD: движение | ПРОБЕЛ: Быстрый удар | E: Тяжёлый удар | F: добыча | V: поговорить с NPC | Панель чата: написать и нажать Enter | Панель снаряжения: надеть / снять / использовать"
+controls_hint,"WASD: move | SPACE: Quick Slash | E: Heavy Strike | F: Loot | V: Talk to NPC","WASD: движение | ПРОБЕЛ: Быстрый удар | E: Тяжёлый удар | F: добыча | V: поговорить с NPC"
+controls_hint_panels,"I: inventory | C: chat | Gear panel: equip / unequip / use items","I: инвентарь | C: чат | Панель снаряжения: надеть / снять / использовать"
+nameplate_level,"Lv. %d","Ур. %d"
 connection_connecting,"Connecting to %s:%d...","Подключение к %s:%d..."
 connection_connected,"Connected as player %d","Подключено: игрок %d"
 connection_disconnected,"Disconnected from server","Соединение с сервером потеряно"

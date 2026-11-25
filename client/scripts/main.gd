@@ -6,9 +6,11 @@ const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_
 const PlayerBodyAdapterType: GDScript = preload("res://client/scripts/player_body_adapter.gd")
 const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 const WorldSnapshotParserType: GDScript = preload("res://client/scripts/world_snapshot_parser.gd")
+const WorldBuilderType: GDScript = preload("res://client/scripts/world_builder.gd")
 
 @onready var status_label: Label = $StatusCanvas/StatusPanel/StatusLabel
 @onready var hint_label: Label = $StatusCanvas/HintLabel
+@onready var hint_panels_label: Label = $StatusCanvas/HintPanelsLabel
 @onready var camera: Camera3D = $Camera3D
 @onready var inventory_panel: PanelContainer = $InventoryCanvas/InventoryPanel
 @onready var npc_dialog_panel: PanelContainer = $QuestCanvas/NpcDialogPanel
@@ -37,6 +39,9 @@ var _quest_states: Array = []
 var _inventory_state: Array[Dictionary] = []
 var _equipment_state: Dictionary = {}
 var _gold: int = 0
+var _world_builder: RefCounted = null
+var _inventory_key_down: bool = false
+var _chat_key_down: bool = false
 var _slash_key_down: bool = false
 var _heavy_strike_key_down: bool = false
 var _guard_break_key_down: bool = false
@@ -58,8 +63,10 @@ func _ready() -> void:
 		return
 	_server_address = _resolve_server_address()
 	_server_port = _resolve_server_port()
+	_build_landscape()
 
 	hint_label.text = tr("controls_hint")
+	hint_panels_label.text = tr("controls_hint_panels")
 	status_label.text = tr("connection_connecting") % [
 		_server_address,
 		_server_port,
@@ -97,6 +104,53 @@ func _ready() -> void:
 	if error != OK:
 		status_label.text = tr("connection_failed")
 		push_error("Could not start ENet client: %s" % error)
+
+
+## Builds the landscape of the zone.
+##
+## The terrain and the props are generated from a fixed seed, so every client
+## shows the same map. The flat ground of the scene is replaced by the
+## generated terrain.
+func _build_landscape() -> void:
+	var ground: Node3D = get_node_or_null("Ground")
+	if ground != null:
+		ground.queue_free()
+	_world_builder = WorldBuilderType.new(_simulation_config)
+	add_child(_world_builder.build_terrain())
+	add_child(_world_builder.build_props(_collect_occupied_positions()))
+
+
+## Collects the positions of the NPCs and the mobs, so that no prop is placed
+## on top of them.
+func _collect_occupied_positions() -> Array:
+	var occupied: Array = []
+	for npc_definition: Dictionary in _game_data_registry["npcs"].values():
+		var spawn_position: Array = npc_definition["spawn_position"]
+		occupied.append(Vector3(
+			float(spawn_position[0]),
+			0.0,
+			float(spawn_position[2]),
+		))
+	for mob_definition: Dictionary in _game_data_registry["mobs"].values():
+		var spawn_position: Array = mob_definition["spawn_position"]
+		occupied.append(Vector3(
+			float(spawn_position[0]),
+			0.0,
+			float(spawn_position[2]),
+		))
+	return occupied
+
+
+## Returns the height of the terrain at the given position.
+func _ground_height(x: float, z: float) -> float:
+	if _world_builder == null:
+		return 0.0
+	return _world_builder.get_height(x, z)
+
+
+## Returns the given position raised onto the terrain.
+func _terrain_position(position: Vector3) -> Vector3:
+	return Vector3(position.x, _ground_height(position.x, position.z), position.z)
 
 
 ## Resolves the server address from the simulation config, with an environment
@@ -157,7 +211,7 @@ func _physics_process(delta: float) -> void:
 	)
 	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view != null:
-		local_view.move_to_simulated_position(_predicted_position, delta)
+		local_view.move_to_simulated_position(_terrain_position(_predicted_position), delta)
 		_predicted_position = local_view.global_position
 
 	_input_send_accumulator += delta
@@ -195,6 +249,14 @@ func _physics_process(delta: float) -> void:
 	if not player_is_defeated and interact_key_pressed and not _interact_key_down:
 		_request_nearest_npc()
 	_interact_key_down = interact_key_pressed
+	var inventory_key_pressed: bool = Input.is_key_pressed(KEY_I)
+	if inventory_key_pressed and not _inventory_key_down:
+		_toggle_inventory_panel()
+	_inventory_key_down = inventory_key_pressed
+	var chat_key_pressed: bool = Input.is_key_pressed(KEY_C)
+	if chat_key_pressed and not _chat_key_down:
+		_toggle_chat_panel()
+	_chat_key_down = chat_key_pressed
 
 
 func _process(_delta: float) -> void:
@@ -314,7 +376,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		if player_id == _local_player_id and not _has_authoritative_position:
 			_predicted_position = positions[player_id]
 			var local_player_view: PlayerBodyAdapter = _player_views[player_id]
-			local_player_view.set_simulated_position(positions[player_id])
+			local_player_view.set_simulated_position(_terrain_position(positions[player_id]))
 			_has_authoritative_position = true
 	for mob_id: String in new_mob_states:
 		_ensure_mob_view(mob_id)
@@ -343,11 +405,11 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 			_npc_views.erase(npc_id)
 		else:
 			var npc_view: Node3D = _npc_views[npc_id]
-			npc_view.position = _npc_states[npc_id]["position"]
+			npc_view.position = _terrain_position(_npc_states[npc_id]["position"])
 	for npc_id: String in _npc_states:
 		_ensure_npc_view(npc_id)
 		var npc_view: Node3D = _npc_views[npc_id]
-		npc_view.position = _npc_states[npc_id]["position"]
+		npc_view.position = _terrain_position(_npc_states[npc_id]["position"])
 	var existing_mob_ids: Array = _mob_views.keys()
 	for mob_id: String in existing_mob_ids:
 		if not _mob_states.has(mob_id):
@@ -356,7 +418,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 			_mob_views.erase(mob_id)
 		else:
 			var mob_view: Node3D = _mob_views[mob_id]
-			mob_view.position = _mob_states[mob_id]["position"]
+			mob_view.position = _terrain_position(_mob_states[mob_id]["position"])
 			mob_view.visible = float(_mob_states[mob_id]["health"]) > 0.0
 	var existing_drop_ids: Array = _drop_views.keys()
 	for drop_id: int in existing_drop_ids:
@@ -368,12 +430,13 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 		_ensure_loot_view(drop_id)
 		var drop_view: MeshInstance3D = _drop_views[drop_id]
 		drop_view.position = (
-			_drop_states[drop_id]["position"]
+			_terrain_position(_drop_states[drop_id]["position"])
 			+ Vector3(0.0, float(_simulation_config["loot_visual_radius"]), 0.0)
 		)
 	_update_combat_status()
 	_update_inventory_panel()
 	_update_quest_tracker()
+	_update_nameplates()
 	_snapshot_buffer.append(snapshot_record)
 	var capacity: int = int(_simulation_config["snapshot_buffer_capacity"])
 	while _snapshot_buffer.size() > capacity:
@@ -429,10 +492,10 @@ func _render_snapshot_buffer() -> void:
 		if player_id == _local_player_id:
 			var correction_factor: float = float(_simulation_config["local_reconciliation_factor"])
 			_predicted_position = _predicted_position.lerp(latest_positions[player_id], correction_factor)
-			player_view.set_simulated_position(_predicted_position)
+			player_view.set_simulated_position(_terrain_position(_predicted_position))
 			continue
 		var older_position: Vector3 = older_positions.get(player_id, newer_position)
-		player_view.position = older_position.lerp(newer_position, interpolation_alpha)
+		player_view.position = _terrain_position(older_position.lerp(newer_position, interpolation_alpha))
 
 
 func _ensure_player_view(player_id: int) -> void:
@@ -459,6 +522,7 @@ func _ensure_player_view(player_id: int) -> void:
 	collision_shape.shape = capsule_shape
 	collision_shape.position.y = capsule_shape.height / 2.0
 	player_view.add_child(collision_shape)
+	player_view.build_nameplate(capsule.height + 0.45)
 	add_child(player_view)
 	_player_views[player_id] = player_view
 	var color: Color = Color(0.25, 0.7, 0.95)
@@ -524,6 +588,35 @@ func _ensure_loot_view(drop_id: int) -> void:
 	loot_view.material_override = material
 	add_child(loot_view)
 	_drop_views[drop_id] = loot_view
+
+
+## Updates the nameplates above the players.
+##
+## The plate of a player shows the level, the health, and the resource that the
+## server reported for it.
+func _update_nameplates() -> void:
+	for player_id: Variant in _player_health_states:
+		var player_view: PlayerBodyAdapter = _player_views.get(player_id)
+		if player_view == null:
+			continue
+		var state: Dictionary = _player_health_states[player_id]
+		player_view.update_nameplate(
+			int(state.get("level", 1)),
+			float(state.get("health", 0.0)),
+			float(state.get("max_health", 1.0)),
+			float(state.get("resource", 0.0)),
+			float(state.get("max_resource", 1.0)),
+		)
+
+
+## Toggles the inventory panel.
+func _toggle_inventory_panel() -> void:
+	inventory_panel.visible = not inventory_panel.visible
+
+
+## Toggles the chat panel.
+func _toggle_chat_panel() -> void:
+	chat_panel.visible = not chat_panel.visible
 
 
 func _update_inventory_panel() -> void:
