@@ -2,7 +2,7 @@
 
 ## Bootstrap protocol constants
 
-- Protocol version: `8`
+- Protocol version: `9`
 - Snapshot channel: `0`, unreliable.
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
@@ -48,6 +48,10 @@ Opcodes:
 - `20`: `NPC_INTERACT_RESULT`
 - `21`: `TRADE_REQUEST`
 - `22`: `TRADE_RESULT`
+- `23`: `CHAT_SAY_REQUEST`
+- `24`: `CHAT_MESSAGE`
+- `25`: `PARTY_REQUEST`
+- `26`: `PARTY_RESULT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 
@@ -173,3 +177,47 @@ The `vendor_items` list of an `NPC_INTERACT_RESULT` carries the assortment of a
 vendor as `item_id`, `buy_price`, and `sell_price` entries, and is empty for an
 NPC that is not a vendor. The client renders those prices, but every trade is
 priced by the server again.
+
+## Chat and parties
+
+The handshake of protocol version 9 carries an optional `name` next to the
+`protocol` version. The name is only used for the chat and for the member list
+of a party; the game itself never depends on it. A client without a name is
+shown as `Player <peer id>`.
+
+`CHAT_SAY_REQUEST` requests contain `channel` and `text`. The supported
+channels are `say` for the zone of the sender and `party` for the party of the
+sender. Only authenticated peers can chat. The server trims the text, collapses
+the inner whitespace, rejects an empty message and a message that is longer
+than `chat_message_max_length`, and rejects a player that sends more than
+`chat_messages_per_second` messages. The server also decides who receives a
+message: a zone message reaches every player of the zone of the sender, and a
+party message reaches only the members of the party of the sender. A party
+message of a player without a party is rejected with `not_in_party`.
+
+`CHAT_MESSAGE` is a reliable event and contains `channel`, `sender_peer_id`,
+`sender_name`, `text`, `system_key`, and `reason`. A player message carries the
+text, a system message carries a translation key in `system_key` and the name
+of the subject in `sender_name`, and a rejected request carries the reason of
+the rejection in `reason`. The rejection reasons are `invalid_player`,
+`invalid_channel`, `rate_limited`, `empty_message`, `message_too_long`, and
+`not_in_party`.
+
+`PARTY_REQUEST` requests contain `action` and `target_peer_id`. The supported
+actions are `invite`, `accept`, and `leave`. Only authenticated peers can send
+a party request. A party belongs to the zone it was created in: an invitation
+into another zone is rejected with `different_zone`. The first invitation of a
+player creates the party and makes the inviter its leader. Only the leader may
+invite, a party never grows beyond `party_max_size`, and a player belongs to
+at most one party. When the leader leaves, the leadership passes to the
+remaining member. An invitation is remembered until the target accepts it, and
+the party is disbanded when its last member leaves.
+
+`PARTY_RESULT` is a reliable event and contains `accepted`, `reason`, `action`,
+`party_id`, `leader_peer_id`, `members`, `inviter_peer_id`, and `inviter_name`.
+Every member entry of `members` contains `peer_id`, `name`, and `is_leader`.
+The server sends the result of an invitation to the invited player as well, so
+the invitation can be shown with an answer button. The rejection reasons are
+`invalid_player`, `invalid_action`, `invalid_target`, `not_leader`,
+`party_full`, `already_in_party`, `no_invite`, `different_zone`,
+`not_in_party`, and `unknown_party`.

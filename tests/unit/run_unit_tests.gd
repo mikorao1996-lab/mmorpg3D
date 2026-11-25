@@ -18,6 +18,8 @@ const NpcRegistryTest: GDScript = preload("res://tests/unit/npc_registry_test.gd
 const TradeSystemTest: GDScript = preload("res://tests/unit/trade_system_test.gd")
 const LootChanceTest: GDScript = preload("res://tests/unit/loot_chance_test.gd")
 const CurrencyTest: GDScript = preload("res://tests/unit/currency_test.gd")
+const ChatSystemTest: GDScript = preload("res://tests/unit/chat_system_test.gd")
+const PartySystemTest: GDScript = preload("res://tests/unit/party_system_test.gd")
 
 
 func _initialize() -> void:
@@ -73,6 +75,12 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not CurrencyTest.new().run():
+		quit(1)
+		return
+	if not ChatSystemTest.new().run():
+		quit(1)
+		return
+	if not PartySystemTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

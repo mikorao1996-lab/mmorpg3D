@@ -58,9 +58,28 @@ signal trade_completed(
 	price: int,
 	gold: int,
 )
+signal chat_message_received(
+	channel: String,
+	sender_peer_id: int,
+	sender_name: String,
+	text: String,
+	system_key: String,
+	reason: String,
+)
+signal party_result_received(
+	accepted: bool,
+	reason: String,
+	action: String,
+	party_id: int,
+	leader_peer_id: int,
+	members: Array,
+	inviter_peer_id: int,
+	inviter_name: String,
+)
 
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
+var player_name: String = ""
 var _transport_connected: bool = false
 var _hello_sent: bool = false
 
@@ -309,11 +328,70 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 				trade_price,
 				trade_gold,
 			)
+		ProtocolConstantsType.OPCODE_CHAT_MESSAGE:
+			var chat_channel: Variant = payload.get("channel", null)
+			var chat_sender_peer_id: Variant = payload.get("sender_peer_id", null)
+			var chat_sender_name: Variant = payload.get("sender_name", null)
+			var chat_text: Variant = payload.get("text", null)
+			var chat_system_key: Variant = payload.get("system_key", null)
+			var chat_reason: Variant = payload.get("reason", null)
+			if (
+				chat_channel is not String
+				or not chat_sender_peer_id is int
+				or chat_sender_name is not String
+				or chat_text is not String
+				or chat_system_key is not String
+				or chat_reason is not String
+			):
+				push_warning("Rejected malformed chat message")
+				return
+			chat_message_received.emit(
+				chat_channel,
+				chat_sender_peer_id,
+				chat_sender_name,
+				chat_text,
+				chat_system_key,
+				chat_reason,
+			)
+		ProtocolConstantsType.OPCODE_PARTY_RESULT:
+			var party_accepted: Variant = payload.get("accepted", null)
+			var party_reason: Variant = payload.get("reason", null)
+			var party_action: Variant = payload.get("action", null)
+			var party_id: Variant = payload.get("party_id", null)
+			var party_leader_peer_id: Variant = payload.get("leader_peer_id", null)
+			var party_members: Variant = payload.get("members", null)
+			var party_inviter_peer_id: Variant = payload.get("inviter_peer_id", null)
+			var party_inviter_name: Variant = payload.get("inviter_name", null)
+			if (
+				party_accepted is not bool
+				or party_reason is not String
+				or party_action is not String
+				or not party_id is int
+				or not party_leader_peer_id is int
+				or not party_members is Array
+				or not party_inviter_peer_id is int
+				or party_inviter_name is not String
+			):
+				push_warning("Rejected malformed party result")
+				return
+			party_result_received.emit(
+				party_accepted,
+				party_reason,
+				party_action,
+				party_id,
+				party_leader_peer_id,
+				party_members,
+				party_inviter_peer_id,
+				party_inviter_name,
+			)
 
 
 func send_hello() -> Error:
+	if player_name.strip_edges().is_empty():
+		player_name = "Traveler-%d" % (randi() % 900 + 100)
 	return send_packet(ProtocolConstantsType.OPCODE_HELLO, {
 		"protocol": ProtocolConstantsType.PROTOCOL_VERSION,
+		"name": player_name,
 	})
 
 
@@ -433,6 +511,38 @@ func request_trade(
 		"action": action,
 		"item_id": item_id,
 		"quantity": quantity,
+	})
+
+
+## Sends a chat message.
+##
+## The channel is `say` for the zone or `party` for the party of the player;
+## the server decides who receives the message.
+func request_chat(channel: String, text: String) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if channel.strip_edges().is_empty() or text.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_CHAT_SAY_REQUEST, {
+		"channel": channel,
+		"text": text,
+	})
+
+
+## Sends a party request.
+##
+## The supported actions are `invite`, `accept`, and `leave`. The target is
+## only used by an invitation.
+func request_party_action(action: String, target_peer_id: int = 0) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if action.strip_edges().is_empty():
+		return ERR_INVALID_PARAMETER
+	if target_peer_id < 0:
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_PARTY_REQUEST, {
+		"action": action,
+		"target_peer_id": target_peer_id,
 	})
 
 

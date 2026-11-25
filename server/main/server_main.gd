@@ -46,7 +46,9 @@ func _ready() -> void:
 		game_data_registry,
 	)
 	server_listener.player_authenticated.connect(server_world.add_player)
-	server_listener.player_disconnected.connect(server_world.remove_player)
+	server_listener.player_authenticated.connect(_on_player_authenticated)
+	server_listener.player_named.connect(_on_player_named)
+	server_listener.player_disconnected.connect(_on_player_disconnected)
 	server_listener.movement_intent.connect(_on_movement_intent)
 	server_listener.zone_transfer_requested.connect(_on_zone_transfer_requested)
 	server_listener.ability_cast_requested.connect(_on_ability_cast_requested)
@@ -56,6 +58,8 @@ func _ready() -> void:
 	server_listener.use_item_requested.connect(_on_use_item_requested)
 	server_listener.npc_interact_requested.connect(_on_npc_interact_requested)
 	server_listener.trade_requested.connect(_on_trade_requested)
+	server_listener.chat_requested.connect(_on_chat_requested)
+	server_listener.party_requested.connect(_on_party_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
 
@@ -136,3 +140,58 @@ func _on_trade_requested(
 		quantity,
 	)
 	server_listener.send_trade_result(peer_id, result)
+
+
+func _on_player_named(peer_id: int, player_name: String) -> void:
+	server_world.set_player_name(peer_id, player_name)
+
+
+func _on_player_authenticated(peer_id: int) -> void:
+	_send_system_message("chat_system_player_joined", peer_id)
+
+
+func _on_player_disconnected(peer_id: int) -> void:
+	_send_system_message("chat_system_player_left", peer_id)
+	server_world.remove_player(peer_id)
+
+
+## Sends a system message to every player of the zone of the peer.
+func _send_system_message(system_key: String, peer_id: int) -> void:
+	var system_message: Dictionary = server_world.build_system_message(system_key, peer_id)
+	for recipient_id: int in system_message["recipients"]:
+		server_listener.send_chat_message(recipient_id, system_message["message"])
+
+
+func _on_chat_requested(peer_id: int, channel: String, text: String) -> void:
+	var result: Dictionary = server_world.chat(peer_id, channel, text)
+	if not bool(result["accepted"]):
+		server_listener.send_chat_message(peer_id, {
+			"channel": "system",
+			"sender_peer_id": 0,
+			"sender_name": "",
+			"text": "",
+			"system_key": "",
+			"reason": str(result["reason"]),
+		})
+		return
+	var message: Dictionary = result["message"]
+	for recipient_id: int in result["recipients"]:
+		server_listener.send_chat_message(recipient_id, message)
+
+
+func _on_party_requested(
+	peer_id: int,
+	action: String,
+	target_peer_id: int,
+) -> void:
+	var result: Dictionary = server_world.party_request(
+		peer_id,
+		action,
+		target_peer_id,
+	)
+	server_listener.send_party_result(peer_id, result)
+	for notification: Dictionary in result["notifications"]:
+		server_listener.send_party_result(int(notification["peer_id"]), notification["result"])
+	for chat_message: Dictionary in result["chat_messages"]:
+		for recipient_id: int in chat_message["recipients"]:
+			server_listener.send_chat_message(recipient_id, chat_message["message"])

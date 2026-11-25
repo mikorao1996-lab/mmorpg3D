@@ -117,6 +117,16 @@ File: `resources/data/simulation.json`
 
 - `starting_gold`: integer >= 0; the gold balance a player starts with. The
   balance is earned from quests and mob defeats and is spent at a vendor.
+- `chat_message_max_length`: integer > 0; the longest message the server
+  accepts. A longer message is rejected with `message_too_long`.
+- `chat_messages_per_second`: integer > 0; the number of messages a player may
+  send within one second. A player above the limit is rejected with
+  `rate_limited`.
+- `chat_history_size`: integer > 0; the number of messages the client keeps in
+  the chat panel.
+- `chat_player_name_max_length`: integer > 0; the longest display name the
+  server accepts in the handshake.
+- `party_max_size`: integer > 0; the number of members a party may have.
 - The remaining keys configure the simulation step, the movement, the interest
   radius, the snapshot rate, and the inventory size.
 

@@ -104,6 +104,16 @@ still drops on defeat, while the items in its `loot_chances` list only drop
 when the server rolls at or below their chance, so the rare equipment of the
 training guardian is a rare drop.
 
+The chat panel on the left holds the chat history, a field to write a message,
+and a switch between the **Zone** and the **Party** channel. A zone message
+reaches every player of the zone, a party message only the members of the
+party. The server checks the length of a message and the number of messages a
+player sends per second, and it decides who receives a message. The party
+section of the panel lists the members of the party, invites the other players
+of the zone, and leaves the party again. A group holds up to
+`party_max_size` players, only the leader invites, and the leadership passes
+to another member when the leader leaves.
+
 The simulation config defines in-memory zones `starter` and `dungeon`; clients
 start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
 is available for server-validated transfers, but there is not yet a portal or
@@ -159,6 +169,11 @@ client scene: talk to the vendor, buy an item with the gold of the player,
 equip it, and see the stat bonus. It then forges a trade request against an
 NPC that does not trade and checks that the server rejects it and leaves the
 balance untouched.
+
+The fifth integration scene starts two production client scenes against one
+in-process server and walks the social loop: a zone message reaches the other
+player, an invitation creates a party, a party message reaches the members,
+and a party message no longer reaches the player that left the party.
 
 ## PostgreSQL driver spike
 

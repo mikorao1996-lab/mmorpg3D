@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://client/scripts/inventory_panel.gd" id="2"]
 [ext_resource type="Script" path="res://client/scripts/quest_tracker_panel.gd" id="3"]
 [ext_resource type="Script" path="res://client/scripts/npc_dialog_panel.gd" id="4"]
+[ext_resource type="Script" path="res://client/scripts/chat_panel.gd" id="5"]
 
 [sub_resource type="Environment" id="Environment_bootstrap"]
 background_mode = 1
@@ -91,3 +92,14 @@ offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 0
 script = ExtResource("4")
+
+[node name="ChatCanvas" type="CanvasLayer" parent="."]
+
+[node name="ChatPanel" type="PanelContainer" parent="ChatCanvas"]
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 250.0
+offset_right = 500.0
+offset_bottom = -160.0
+grow_vertical = 2
+script = ExtResource("5")

@@ -127,6 +127,14 @@ func get_player_state(peer_id: int) -> Dictionary:
 	return _players[peer_id].duplicate(true)
 
 
+## Returns the peers of the players in this zone.
+func get_player_ids() -> Array[int]:
+	var player_ids: Array[int] = []
+	for peer_id: Variant in _players:
+		player_ids.append(int(peer_id))
+	return player_ids
+
+
 func award_experience(peer_id: int, amount: int) -> Dictionary:
 	if not _players.has(peer_id):
 		return {"ok": false, "error": "Player is not in this zone."}

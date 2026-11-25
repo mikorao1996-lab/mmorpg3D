@@ -13,6 +13,7 @@ const WorldSnapshotParserType: GDScript = preload("res://client/scripts/world_sn
 @onready var inventory_panel: PanelContainer = $InventoryCanvas/InventoryPanel
 @onready var npc_dialog_panel: PanelContainer = $QuestCanvas/NpcDialogPanel
 @onready var quest_tracker_panel: PanelContainer = $QuestCanvas/QuestTrackerPanel
+@onready var chat_panel: PanelContainer = $ChatCanvas/ChatPanel
 
 var _simulation_config: Dictionary = {}
 var _game_data_registry: Dictionary = {}
@@ -72,6 +73,11 @@ func _ready() -> void:
 	npc_dialog_panel.turn_in_quest_requested.connect(_on_turn_in_quest_requested)
 	npc_dialog_panel.trade_requested.connect(_on_trade_requested)
 	quest_tracker_panel.setup(_game_data_registry["items"], _game_data_registry["mobs"])
+	chat_panel.setup(_simulation_config)
+	chat_panel.chat_message_requested.connect(_on_chat_message_requested)
+	chat_panel.party_invite_requested.connect(_on_party_invite_requested)
+	chat_panel.party_invite_responded.connect(_on_party_invite_responded)
+	chat_panel.party_leave_requested.connect(_on_party_leave_requested)
 	_client_net = ClientNet.new()
 	add_child(_client_net)
 	_client_net.hello_accepted.connect(_on_hello_accepted)
@@ -84,6 +90,8 @@ func _ready() -> void:
 	_client_net.item_use_completed.connect(_on_item_use_completed)
 	_client_net.npc_interaction_completed.connect(_on_npc_interaction_completed)
 	_client_net.trade_completed.connect(_on_trade_completed)
+	_client_net.chat_message_received.connect(_on_chat_message_received)
+	_client_net.party_result_received.connect(_on_party_result_received)
 
 	var error: Error = _client_net.connect_to_server(_server_address, _server_port)
 	if error != OK:
@@ -129,7 +137,8 @@ func _physics_process(delta: float) -> void:
 		not local_health_state.is_empty() and float(local_health_state["health"]) <= 0.0
 	)
 	var input_direction: Vector2 = Vector2.ZERO
-	if not player_is_defeated:
+	var chat_input_focused: bool = chat_panel.is_input_focused()
+	if not player_is_defeated and not chat_input_focused:
 		input_direction = Vector2(
 			float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A)),
 			float(Input.is_key_pressed(KEY_S)) - float(Input.is_key_pressed(KEY_W)),
@@ -218,6 +227,7 @@ func _on_hello_accepted(protocol: int, player_id: int) -> void:
 	_local_player_id = player_id
 	_ensure_player_view(player_id)
 	_set_player_color(player_id, Color(0.95, 0.72, 0.25))
+	chat_panel.set_local_peer(player_id)
 	status_label.text = tr("connection_connected") % player_id
 
 
@@ -321,6 +331,10 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	_inventory_state = inventory_state
 	_equipment_state = equipment_state
 	_gold = int(parsed["gold"])
+	var zone_player_ids: Array[int] = []
+	for player_id: int in positions:
+		zone_player_ids.append(player_id)
+	chat_panel.set_zone_players(zone_player_ids)
 	var existing_npc_ids: Array = _npc_views.keys()
 	for npc_id: String in existing_npc_ids:
 		if not _npc_states.has(npc_id):
@@ -744,6 +758,90 @@ func _on_trade_completed(
 	else:
 		status_label.text = tr("trade_sell_success") % [item_name, quantity, price * quantity]
 	_combat_message_time_remaining = 2.0
+
+
+## Sends a chat message to the server.
+##
+## The request names the channel and the text; the server decides who receives
+## the message.
+func _on_chat_message_requested(channel: String, text: String) -> void:
+	var error: Error = _client_net.request_chat(channel, text)
+	if error != OK:
+		push_warning("Could not request chat message: %s" % error)
+
+
+## Renders a chat message of the server.
+func _on_chat_message_received(
+	channel: String,
+	sender_peer_id: int,
+	sender_name: String,
+	text: String,
+	system_key: String,
+	reason: String,
+) -> void:
+	chat_panel.add_message({
+		"channel": channel,
+		"sender_peer_id": sender_peer_id,
+		"sender_name": sender_name,
+		"text": text,
+		"system_key": system_key,
+		"reason": reason,
+	})
+
+
+## Requests an invitation into a party.
+func _on_party_invite_requested(target_peer_id: int) -> void:
+	var error: Error = _client_net.request_party_action("invite", target_peer_id)
+	if error != OK:
+		push_warning("Could not request party invitation: %s" % error)
+
+
+## Answers an invitation into a party.
+##
+## A declined invitation leaves the party, because the player was not a member
+## of it yet.
+func _on_party_invite_responded(accepted: bool) -> void:
+	var action: String = "accept" if accepted else "leave"
+	var error: Error = _client_net.request_party_action(action)
+	if error != OK:
+		push_warning("Could not answer party invitation: %s" % error)
+
+
+## Requests to leave the party of the player.
+func _on_party_leave_requested() -> void:
+	var error: Error = _client_net.request_party_action("leave")
+	if error != OK:
+		push_warning("Could not request party departure: %s" % error)
+
+
+## Renders the result of a party request.
+func _on_party_result_received(
+	accepted: bool,
+	reason: String,
+	action: String,
+	party_id: int,
+	leader_peer_id: int,
+	members: Array,
+	inviter_peer_id: int,
+	inviter_name: String,
+) -> void:
+	if action == "invite" and accepted and inviter_peer_id != 0:
+		chat_panel.show_invitation(inviter_peer_id, inviter_name)
+		return
+	if accepted:
+		chat_panel.set_party_state(party_id, leader_peer_id, members)
+		return
+	if reason == "not_in_party":
+		chat_panel.clear_party_state()
+		return
+	chat_panel.add_message({
+		"channel": "system",
+		"sender_peer_id": 0,
+		"sender_name": "",
+		"text": "",
+		"system_key": "",
+		"reason": "party_" + reason,
+	})
 
 
 func _request_nearest_loot() -> void:
