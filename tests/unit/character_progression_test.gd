@@ -16,7 +16,9 @@ func run() -> bool:
 		game_data["progression"]["level_2"]["experience_required"],
 	)
 	game_data["mobs"]["training_slime"]["experience_reward"] = level_two_experience
-	game_data["mobs"]["training_wolf"]["spawn_position"] = [0, 0, -2]
+	# Both mobs are placed next to the spawn point, so the hits are in range.
+	game_data["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
+	game_data["mobs"]["training_wolf"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 	game_data["mobs"]["training_wolf"]["attack_range"] = 2.5
 
 	var server_world: RefCounted = ServerWorldType.new(config, game_data)
@@ -93,6 +95,7 @@ func run() -> bool:
 		int(cap_game_data["progression"]["level_10"]["experience_required"]) + 50
 	)
 	cap_game_data["mobs"]["training_slime"]["experience_reward"] = cap_experience
+	cap_game_data["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 	var cap_world: RefCounted = ServerWorldType.new(config, cap_game_data)
 	cap_world.add_player(1)
 	for hit_index: int in range(2):

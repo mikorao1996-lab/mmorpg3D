@@ -56,7 +56,7 @@ Both clients connect to `127.0.0.1:7788`. The address and port come from
 `MMORPG3D_SERVER_PORT` to join a server on another machine without a rebuild.
 Use **WASD** to move; each client
 shows both players, predicts its own movement, and interpolates server snapshots.
-The server filters snapshots by the configured `interest_radius` (10 world units
+The server filters snapshots by the configured `interest_radius` (16 world units
 by default) and always includes the observing player. Close the server with
 `Ctrl+C` when finished. Client player bodies use `CharacterBody3D` as a platform
 adapter: the shared movement simulation still determines target positions, while
@@ -70,12 +70,23 @@ decoration only — they never touch the server state. The playable area is
 `world_half_extent` units around the spawn point, and the server sends the
 mobs, the NPCs, and the drops of the `interest_radius` around a player.
 
+The hub itself is laid out by hand in the registries. The quest givers and the
+vendor stand next to the spawn point, the training slimes hold the glade to
+the west, the wolves patrol the woods to the east, and the mini-boss waits on
+its own spot to the north. A mob type owns a list of spawn points, and the
+server creates one instance per point, so the hub holds ten mobs of three
+types. The instances of a type share its statistics, and a quest counts the
+defeats of the type, not of a single instance. The layout is checked
+automatically: no two entities of the hub stand too close, everything stays
+inside the world and within a walk of the spawn point, and every equipment
+slot has an item the player can actually obtain.
+
 Every player carries a nameplate above the head with the level of the
 character, a bar for the health, and a bar for the resource. The panels of the
 interface can be hidden: **I** toggles the inventory panel, **C** toggles the
 chat panel.
 
-Each zone contains the configured training slime. **SPACE** uses `starter_slash`and **E** uses `heavy_strike` on the nearest living mob. **Q** uses
+Each zone holds the mobs of the registries. **SPACE** uses `starter_slash`and **E** uses `heavy_strike` on the nearest living mob. **Q** uses
 `guard_break`, **R** uses `whirlwind`, and **T** uses `second_wind`. The server
 enforces target, range, damage/heal, resource cost, and separate cooldowns. Mob health is
 shown in the status panel, and a defeated mob respawns after its configured
@@ -190,6 +201,13 @@ The sixth integration scene checks the landscape and the interface against the
 production client scene: the terrain and the props are built, the flat ground
 of the scene is replaced, the nameplate of a player shows the level and the
 bars, and the inventory and the chat panel can be hidden and shown again.
+
+The seventh integration scene walks the content of the hub with two real
+clients against an in-process server. The positions of the NPCs and of the
+mobs are taken from the registries as they are: the first client walks to the
+quest giver, accepts a quest, completes it, hands it in, defeats a slime of
+the glade, picks up its loot, and buys a potion from the vendor, while the
+second client writes into the zone chat and joins the party.
 
 ## PostgreSQL driver spike
 

@@ -1,11 +1,11 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "entries": [
     {
       "id": "quest_giver_mira",
       "name_key": "npc_quest_giver_mira",
       "dialogue_key": "npc_dialogue_mira",
-      "spawn_position": [0.0, 0.0, 4.0],
+      "spawn_position": [-3.5, 0.0, 2.5],
       "interaction_range": 3.0,
       "quest_ids": [
         "slime_problem",
@@ -18,7 +18,7 @@
       "id": "quest_giver_bron",
       "name_key": "npc_quest_giver_bron",
       "dialogue_key": "npc_dialogue_bron",
-      "spawn_position": [7.0, 0.0, -3.0],
+      "spawn_position": [4.0, 0.0, -4.5],
       "interaction_range": 3.0,
       "quest_ids": [
         "pelt_hunt"
@@ -28,7 +28,7 @@
       "id": "vendor_grom",
       "name_key": "npc_vendor_grom",
       "dialogue_key": "npc_dialogue_grom",
-      "spawn_position": [-5.0, 0.0, 4.0],
+      "spawn_position": [3.5, 0.0, 2.5],
       "interaction_range": 3.0,
       "quest_ids": []
     }

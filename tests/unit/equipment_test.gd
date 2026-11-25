@@ -135,11 +135,11 @@ func run() -> bool:
 		return false
 
 	var combat_registry: Dictionary = registries.duplicate(true)
-	combat_registry["mobs"]["training_slime"]["spawn_position"] = [0.0, 0.0, 0.0]
+	combat_registry["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, 0.0]]
 	combat_registry["mobs"]["training_slime"]["health"] = 5.0
 	combat_registry["mobs"]["training_slime"]["aggro_range"] = 0.0
 	combat_registry["mobs"]["training_slime"]["loot_item_ids"] = ["starter_sword"]
-	combat_registry["mobs"]["training_wolf"]["spawn_position"] = [0.0, 0.0, 0.0]
+	combat_registry["mobs"]["training_wolf"]["spawn_positions"] = [[0.0, 0.0, 0.0]]
 	combat_registry["mobs"]["training_wolf"]["health"] = 100.0
 	combat_registry["mobs"]["training_wolf"]["aggro_range"] = 0.0
 	combat_registry["abilities"]["starter_slash"]["cooldown_seconds"] = 0.0

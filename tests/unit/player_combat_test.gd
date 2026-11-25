@@ -10,6 +10,8 @@ func run() -> bool:
 	var game_data: Dictionary = GameDataRegistryType.load_all()
 	if config.is_empty() or game_data.is_empty():
 		return false
+	# The slime is placed next to the spawn point, so it reaches the player.
+	game_data["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 	var chase_world: RefCounted = ServerWorldType.new(config, game_data)
 	chase_world.add_player(1)
 	chase_world.advance(0.1)

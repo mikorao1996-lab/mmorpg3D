@@ -16,6 +16,9 @@ func run() -> bool:
 	# The interest radius is pinned here, because the expectation of the test
 	# depends on the players that fit into it.
 	config["interest_radius"] = 10.0
+	# The slime is placed next to the spawn point: the first player reaches it
+	# with a slash, and the second one stays outside of the ability range.
+	game_data_registry["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 
 	var server_world: RefCounted = ServerWorldType.new(config, game_data_registry)
 	for peer_id: int in range(1, 6):

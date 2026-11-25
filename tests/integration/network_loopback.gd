@@ -62,7 +62,7 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	var test_slime: Dictionary = _game_data_registry["mobs"]["training_slime"]
-	test_slime["spawn_position"] = [1.5, 0.0, -1.5]
+	test_slime["spawn_positions"] = [[1.5, 0.0, -1.5]]
 	test_slime["aggro_range"] = 0.0
 
 	listener = load("res://server/net/server_listener.gd").new()

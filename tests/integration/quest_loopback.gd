@@ -43,6 +43,8 @@ func _ready() -> void:
 	game_data_registry["mobs"]["training_slime"]["health"] = 1.0
 	game_data_registry["mobs"]["training_slime"]["respawn_seconds"] = 0.3
 	game_data_registry["mobs"]["training_slime"]["aggro_range"] = 0.0
+	# The slime is placed next to the spawn point, so the cast is in range.
+	game_data_registry["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 	game_data_registry["abilities"]["starter_slash"]["cooldown_seconds"] = 0.0
 	game_data_registry["abilities"]["starter_slash"]["resource_cost"] = 0.0
 	game_data_registry["npcs"][MIRA_ID]["spawn_position"] = [0.0, 0.0, 2.0]

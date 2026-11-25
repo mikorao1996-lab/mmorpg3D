@@ -2,6 +2,7 @@ class_name ServerZone
 extends RefCounted
 
 const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simulation.gd")
+const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 const InventoryComponentType: GDScript = preload("res://server/systems/inventory_component.gd")
 const EquipmentComponentType: GDScript = preload("res://server/systems/equipment_component.gd")
 const EquipmentSystemType: GDScript = preload("res://server/systems/equipment_system.gd")
@@ -28,6 +29,8 @@ var _simulation_accumulator: float = 0.0
 var _snapshot_accumulator: float = 0.0
 var _next_spawn_index: int = 0
 var _mob_definitions: Dictionary = {}
+var _mob_definitions_by_instance: Dictionary = {}
+var _mob_types_by_instance: Dictionary = {}
 var _item_definitions: Dictionary = {}
 var _progression_definitions: Dictionary = {}
 var _quest_definitions: Dictionary = {}
@@ -63,25 +66,34 @@ func _init(
 	_vendor_definitions = game_data_registry["vendors"]
 	_starting_gold = int(config.get("starting_gold", 0))
 	_npcs = NpcSystemType.build_states(_npc_definitions)
-	for mob_id: String in _mob_definitions:
-		var definition: Dictionary = _mob_definitions[mob_id]
-		var spawn_position: Array = definition["spawn_position"]
-		_mobs[mob_id] = {
-			"position": Vector3(
-				float(spawn_position[0]),
-				float(spawn_position[1]),
-				float(spawn_position[2]),
-			),
-			"home_position": Vector3(
-				float(spawn_position[0]),
-				float(spawn_position[1]),
-				float(spawn_position[2]),
-			),
+	for instance: Dictionary in GameDataRegistryType.build_mob_instances(_mob_definitions):
+		var instance_id: String = str(instance["instance_id"])
+		var type_id: String = str(instance["type_id"])
+		var definition: Dictionary = _mob_definitions[type_id]
+		var spawn_position: Vector3 = instance["position"]
+		_mobs[instance_id] = {
+			"position": spawn_position,
+			"home_position": spawn_position,
 			"health": float(definition["health"]),
 			"respawn_remaining_seconds": 0.0,
 			"attack_remaining_seconds": 0.0,
 			"loot_spawned": false,
 		}
+		_mob_definitions_by_instance[instance_id] = definition
+		_mob_types_by_instance[instance_id] = type_id
+
+
+## Returns the type of a mob instance.
+##
+## The quests count the defeats of a mob type, so the type of the instance has
+## to be known before a defeat is recorded.
+func get_mob_type(mob_id: String) -> String:
+	return str(_mob_types_by_instance.get(mob_id, ""))
+
+
+## Returns the definition of a mob instance.
+func _mob_definition(mob_id: String) -> Dictionary:
+	return _mob_definitions_by_instance.get(mob_id, {})
 
 
 func add_player(peer_id: int) -> void:
@@ -223,7 +235,7 @@ func get_mob_state(mob_id: String) -> Dictionary:
 	if not _mobs.has(mob_id):
 		return {}
 	var mob_state: Dictionary = _mobs[mob_id]
-	var mob_definition: Dictionary = _mob_definitions[mob_id]
+	var mob_definition: Dictionary = _mob_definition(mob_id)
 	return {
 		"position": mob_state["position"],
 		"health": mob_state["health"],
@@ -237,7 +249,7 @@ func damage_mob(mob_id: String, damage: float) -> bool:
 	var mob_state: Dictionary = _mobs[mob_id]
 	if float(mob_state["health"]) <= 0.0:
 		return false
-	var definition: Dictionary = _mob_definitions[mob_id]
+	var definition: Dictionary = _mob_definition(mob_id)
 	var effective_damage: float = maxf(
 		0.0,
 		damage - float(definition["defense"]),
@@ -252,7 +264,7 @@ func damage_mob(mob_id: String, damage: float) -> bool:
 func spawn_loot_for_mob(mob_id: String) -> Dictionary:
 	if not _mobs.has(mob_id):
 		return {"ok": false, "error": "Mob is not present in this zone."}
-	return _loot_system.spawn_for_mob(_mobs[mob_id], _mob_definitions[mob_id])
+	return _loot_system.spawn_for_mob(_mobs[mob_id], _mob_definition(mob_id))
 
 
 func pickup_loot(peer_id: int, drop_id: int) -> Dictionary:
@@ -419,10 +431,16 @@ func trade(
 
 
 ## Records a mob defeat for the quests of the attacking player.
+##
+## The quest counts the defeats of a mob type, so the type of the defeated
+## instance is recorded instead of the instance itself.
 func record_quest_kill(peer_id: int, mob_id: String) -> void:
 	if not _players.has(peer_id):
 		return
-	QuestSystemType.record_kill(_players[peer_id], mob_id, _quest_definitions)
+	var mob_type: String = get_mob_type(mob_id)
+	if mob_type.is_empty():
+		return
+	QuestSystemType.record_kill(_players[peer_id], mob_type, _quest_definitions)
 
 
 ## Returns the NPC states of this zone for the world snapshot.
@@ -526,7 +544,7 @@ func _advance_mob_respawns() -> void:
 			float(mob_state["respawn_remaining_seconds"]) - _simulation_step_seconds,
 		)
 		if float(mob_state["respawn_remaining_seconds"]) == 0.0:
-			var definition: Dictionary = _mob_definitions[mob_id]
+			var definition: Dictionary = _mob_definition(mob_id)
 			mob_state["health"] = float(definition["health"])
 			mob_state["position"] = mob_state["home_position"]
 			mob_state["attack_remaining_seconds"] = 0.0
@@ -537,7 +555,7 @@ func _advance_mob_ai() -> void:
 		var mob_state: Dictionary = _mobs[mob_id]
 		if float(mob_state["health"]) <= 0.0:
 			continue
-		var definition: Dictionary = _mob_definitions[mob_id]
+		var definition: Dictionary = _mob_definition(mob_id)
 		var mob_position: Vector3 = mob_state["position"]
 		var nearest_peer_id: int = 0
 		var nearest_distance_squared: float = INF
@@ -614,7 +632,7 @@ func _create_snapshot_for(observer_id: int) -> Dictionary:
 			"zone_id": zone_id,
 			"players": _players,
 			"mobs": _mobs,
-			"mob_definitions": _mob_definitions,
+			"mob_definitions": _mob_definitions_by_instance,
 			"npcs": _npcs,
 			"drops": _loot_system.get_drops(),
 			"interest_radius": _interest_radius,

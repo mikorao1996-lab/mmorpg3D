@@ -31,6 +31,7 @@ var _player_views: Dictionary = {}
 var _player_health_states: Dictionary = {}
 var _mob_states: Dictionary = {}
 var _mob_views: Dictionary = {}
+var _mob_types_by_instance: Dictionary = {}
 var _drop_states: Dictionary = {}
 var _drop_views: Dictionary = {}
 var _npc_states: Dictionary = {}
@@ -63,6 +64,9 @@ func _ready() -> void:
 		return
 	_server_address = _resolve_server_address()
 	_server_port = _resolve_server_port()
+	_mob_types_by_instance = GameDataRegistryType.build_mob_instance_types(
+		_game_data_registry["mobs"]
+	)
 	_build_landscape()
 
 	hint_label.text = tr("controls_hint")
@@ -131,14 +135,21 @@ func _collect_occupied_positions() -> Array:
 			0.0,
 			float(spawn_position[2]),
 		))
-	for mob_definition: Dictionary in _game_data_registry["mobs"].values():
-		var spawn_position: Array = mob_definition["spawn_position"]
-		occupied.append(Vector3(
-			float(spawn_position[0]),
-			0.0,
-			float(spawn_position[2]),
-		))
+	for instance: Dictionary in GameDataRegistryType.build_mob_instances(
+		_game_data_registry["mobs"]
+	):
+		var position: Vector3 = instance["position"]
+		occupied.append(Vector3(position.x, 0.0, position.z))
 	return occupied
+
+
+## Returns the definition of a mob.
+##
+## A mob type can have several instances in the zone, so the definition is
+## looked up by the type of the instance.
+func _mob_definition(mob_id: String) -> Dictionary:
+	var mob_type: String = str(_mob_types_by_instance.get(mob_id, mob_id))
+	return _game_data_registry["mobs"].get(mob_type, {})
 
 
 ## Returns the height of the terrain at the given position.
@@ -308,7 +319,7 @@ func _on_ability_cast_completed(
 	health: float,
 	max_health: float,
 ) -> void:
-	var mob_definition: Dictionary = _game_data_registry["mobs"].get(mob_id, {})
+	var mob_definition: Dictionary = _mob_definition(mob_id)
 	var mob_name: String = tr(mob_definition.get("name_key", "combat_unknown_target"))
 	if accepted:
 		status_label.text = tr("combat_cast_success") % [
@@ -534,7 +545,7 @@ func _ensure_player_view(player_id: int) -> void:
 func _ensure_mob_view(mob_id: String) -> void:
 	if _mob_views.has(mob_id):
 		return
-	var mob_definition: Dictionary = _game_data_registry["mobs"][mob_id]
+	var mob_definition: Dictionary = _mob_definition(mob_id)
 	var mob_view: Node3D = Node3D.new()
 	mob_view.name = "Mob_%s" % mob_id
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
@@ -637,7 +648,7 @@ func _update_combat_status() -> void:
 	):
 		return
 	var mob_id: String = _mob_states.keys()[0]
-	var mob_definition: Dictionary = _game_data_registry["mobs"][mob_id]
+	var mob_definition: Dictionary = _mob_definition(mob_id)
 	var player_state: Dictionary = _player_health_states[_local_player_id]
 	var inventory_names: PackedStringArray = []
 	for slot: Dictionary in _inventory_state:

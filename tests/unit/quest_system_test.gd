@@ -6,7 +6,7 @@ const SimulationConfigType: GDScript = preload("res://shared/data/simulation_con
 const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 const QuestSystemType: GDScript = preload("res://server/systems/quest_system.gd")
 
-const MIRA_POSITION: Vector3 = Vector3(0.0, 0.0, 3.0)
+const MIRA_POSITION: Vector3 = Vector3(-2.0, 0.0, 2.5)
 
 
 func run() -> bool:

@@ -438,7 +438,8 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 	_ability_ready_at_ms[peer_id] = player_cooldowns
 	var updated_target_state: Dictionary = zone.get_mob_state(target_mob_id)
 	if float(updated_target_state["health"]) == 0.0:
-		var mob_definition: Dictionary = _game_data_registry["mobs"][target_mob_id]
+		var mob_type: String = zone.get_mob_type(target_mob_id)
+		var mob_definition: Dictionary = _game_data_registry["mobs"].get(mob_type, {})
 		var experience_result: Dictionary = zone.award_experience(
 			peer_id,
 			int(mob_definition["experience_reward"]),

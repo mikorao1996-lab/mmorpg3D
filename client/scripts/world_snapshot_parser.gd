@@ -229,7 +229,9 @@ static func _parse_mobs(
 		):
 			result["error"] = "malformed mob state in world snapshot"
 			return result
-		if not game_data_registry["mobs"].has(mob_id):
+		if not GameDataRegistryType.build_mob_instance_types(
+			game_data_registry["mobs"]
+		).has(mob_id):
 			result["error"] = "snapshot for unknown mob %s" % mob_id
 			return result
 		mob_states[mob_id] = {

@@ -12,6 +12,8 @@ func run() -> bool:
 		return false
 	game_data["abilities"]["starter_slash"]["cooldown_seconds"] = 0.0
 	game_data["mobs"]["training_slime"]["respawn_seconds"] = 0.1
+	# The slime is placed next to the spawn point, so the cast is in range.
+	game_data["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 
 	var server_world: RefCounted = ServerWorldType.new(config, game_data)
 	server_world.add_player(1)

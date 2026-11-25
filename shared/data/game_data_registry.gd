@@ -24,8 +24,9 @@ const TARGET_TYPES: PackedStringArray = ["self", "ally", "enemy"]
 const ABILITY_EFFECT_TYPES: PackedStringArray = ["damage", "heal", "buff"]
 const QUEST_OBJECTIVE_TYPES: PackedStringArray = ["kill", "collect", "talk"]
 const ITEM_STAT_KEYS: PackedStringArray = ["attack", "defense", "health", "resource"]
-const SCHEMA_VERSION: int = 2
+const SCHEMA_VERSION: int = 3
 const MAX_CHARACTER_LEVEL: int = 10
+const MOB_INSTANCE_SEPARATOR: String = "_"
 
 
 static func load_all() -> Dictionary:
@@ -44,6 +45,51 @@ static func load_all() -> Dictionary:
 		push_error(reference_error)
 		return {}
 	return registries
+
+
+## Returns the identifier of a mob instance.
+##
+## The first instance of a mob type keeps the identifier of the type, so a mob
+## with a single spawn point is addressed by its own name. The next instances
+## get a numeric suffix.
+static func mob_instance_id(type_id: String, index: int) -> String:
+	if index <= 0:
+		return type_id
+	return "%s%s%d" % [type_id, MOB_INSTANCE_SEPARATOR, index + 1]
+
+
+## Returns every mob instance of the registry.
+##
+## An entry carries the identifier of the instance, the identifier of the type
+## it belongs to, and the spawn position. The server spawns the instances, and
+## the client resolves the type of an instance from the same registry, so both
+## sides agree on the mapping without an extra network message.
+static func build_mob_instances(mobs: Dictionary) -> Array:
+	var instances: Array = []
+	for type_id: String in mobs:
+		var definition: Dictionary = mobs[type_id]
+		var spawn_positions: Array = definition.get("spawn_positions", [])
+		for index: int in range(spawn_positions.size()):
+			var position: Array = spawn_positions[index]
+			instances.append({
+				"instance_id": mob_instance_id(type_id, index),
+				"type_id": type_id,
+				"position": Vector3(
+					float(position[0]),
+					float(position[1]),
+					float(position[2]),
+				),
+			})
+	return instances
+
+
+## Returns the map from the identifier of a mob instance to the identifier of
+## the type it belongs to.
+static func build_mob_instance_types(mobs: Dictionary) -> Dictionary:
+	var instance_types: Dictionary = {}
+	for instance: Dictionary in build_mob_instances(mobs):
+		instance_types[str(instance["instance_id"])] = str(instance["type_id"])
+	return instance_types
 
 
 static func _load_registry(registry_name: String, path: String) -> Dictionary:
@@ -173,7 +219,7 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 				or not _is_number_at_least(entry.get("attack_range"), 0.0)
 				or not _is_number_greater_than(entry.get("attack_interval_seconds"), 0.0)
 				or not _is_number_greater_than(entry.get("respawn_seconds"), 0.0)
-				or not _is_vector3_array(entry.get("spawn_position"))
+				or not _is_vector3_array_list(entry.get("spawn_positions"))
 				or not _is_number_greater_than(entry.get("visual_radius"), 0.0)
 				or not _is_number_greater_than(entry.get("visual_height"), 0.0)
 				or not _is_string_array(entry.get("loot_item_ids"))
@@ -427,4 +473,24 @@ static func _is_vector3_array(value: Variant) -> bool:
 	for component: Variant in value:
 		if not _is_finite_number(component):
 			return false
+	return true
+
+
+## A list of spawn points has to be non-empty and every point has to be a
+## distinct position.
+static func _is_vector3_array_list(value: Variant) -> bool:
+	if not value is Array or value.is_empty():
+		return false
+	var seen: Dictionary = {}
+	for position: Variant in value:
+		if not _is_vector3_array(position):
+			return false
+		var key: String = "%0.3f|%0.3f|%0.3f" % [
+			float(position[0]),
+			float(position[1]),
+			float(position[2]),
+		]
+		if seen.has(key):
+			return false
+		seen[key] = true
 	return true

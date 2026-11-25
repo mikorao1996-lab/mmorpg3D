@@ -21,6 +21,7 @@ const CurrencyTest: GDScript = preload("res://tests/unit/currency_test.gd")
 const ChatSystemTest: GDScript = preload("res://tests/unit/chat_system_test.gd")
 const PartySystemTest: GDScript = preload("res://tests/unit/party_system_test.gd")
 const WorldBuilderTest: GDScript = preload("res://tests/unit/world_builder_test.gd")
+const HubLayoutTest: GDScript = preload("res://tests/unit/hub_layout_test.gd")
 
 
 func _initialize() -> void:
@@ -85,6 +86,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not WorldBuilderTest.new().run():
+		quit(1)
+		return
+	if not HubLayoutTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

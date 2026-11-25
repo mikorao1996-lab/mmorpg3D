@@ -64,9 +64,11 @@ func run() -> bool:
 	for npc_definition: Dictionary in registries["npcs"].values():
 		var npc_position: Array = npc_definition["spawn_position"]
 		occupied.append(Vector3(float(npc_position[0]), 0.0, float(npc_position[2])))
-	for mob_definition: Dictionary in registries["mobs"].values():
-		var mob_position: Array = mob_definition["spawn_position"]
-		occupied.append(Vector3(float(mob_position[0]), 0.0, float(mob_position[2])))
+	for instance: Dictionary in GameDataRegistryType.build_mob_instances(
+		registries["mobs"]
+	):
+		var mob_position: Vector3 = instance["position"]
+		occupied.append(Vector3(mob_position.x, 0.0, mob_position.z))
 
 	var props: MeshInstance3D = builder.build_props(occupied)
 	if props.mesh == null:

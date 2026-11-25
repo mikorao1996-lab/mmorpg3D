@@ -6,7 +6,7 @@ files use a versioned root object:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "entries": []
 }
 ```
@@ -53,8 +53,12 @@ File: `resources/data/mobs.json`
   `health` > 0.
 - `attack`, `defense`, `move_speed`, `aggro_range`, `attack_range`: finite numbers >= 0.
 - `attack_interval_seconds` and `respawn_seconds`: finite numbers > 0.
-- `spawn_position`: three finite numeric coordinates; `visual_radius` and
-  `visual_height` are finite numbers > 0.
+- `spawn_positions`: a non-empty list of spawn points, each of them three finite
+  numeric coordinates. Every point holds one instance of the mob, so a type with
+  three points stands in the world three times. The points of a type have to be
+  distinct; the instances of different types may stand close to each other, the
+  layout check of the hub keeps the distance between them.
+  `visual_radius` and `visual_height` are finite numbers > 0.
 - `loot_item_ids`: unique item IDs; each must exist in the item registry.
   Every listed item is a guaranteed drop on defeat.
 - `loot_chances`: list of `{item_id, chance}` entries; each item must exist and
@@ -67,6 +71,14 @@ File: `resources/data/mobs.json`
   combat and loot rules with their own data-defined stats. The current catalog
   spreads the six equipment slots over the mob loot tables and the quest
   rewards so every slot has an obtainable item.
+
+A mob type is a definition, and every spawn point of it is an instance. The
+instances are numbered in the order of their spawn points: the first instance
+keeps the identifier of the type (`training_slime`), the next ones get a
+numeric suffix (`training_slime_2`). The server spawns the instances and
+counts the defeats of a type, and the client resolves the type of an instance
+from the same registry, so the wire protocol carries only the identifier of
+the instance.
 
 ## Progression
 

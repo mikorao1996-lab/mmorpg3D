@@ -56,6 +56,8 @@ func run() -> bool:
 	registries["mobs"]["training_slime"]["aggro_range"] = 0.0
 	registries["mobs"]["training_slime"]["loot_item_ids"] = ["starter_sword"]
 	registries["mobs"]["training_slime"]["loot_chances"] = []
+	# The slime is placed next to the spawn point, so its drop is in reach.
+	registries["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 	var zone: RefCounted = ServerZoneType.new("starter", config, registries)
 	zone.add_player_at(1, Vector3.ZERO)
 	zone.add_player_at(2, Vector3(8.0, 0.0, 8.0))
@@ -109,25 +111,26 @@ func run() -> bool:
 	transfer_registry["mobs"]["training_slime"]["health"] = 1.0
 	transfer_registry["mobs"]["training_slime"]["loot_item_ids"] = ["starter_sword"]
 	transfer_registry["mobs"]["training_slime"]["loot_chances"] = []
+	transfer_registry["mobs"]["training_slime"]["spawn_positions"] = [[0.0, 0.0, -2.0]]
 	transfer_registry["abilities"]["starter_slash"]["cooldown_seconds"] = 0.0
 	transfer_registry["abilities"]["starter_slash"]["resource_cost"] = 0.0
 	transfer_registry["abilities"]["starter_slash"]["magnitude"] = 5.0
 	var world: RefCounted = ServerWorldType.new(config, transfer_registry)
-	world.add_player(3)
-	var kill_result: Dictionary = world.cast_ability(3, "starter_slash", "training_slime")
+	world.add_player(1)
+	var kill_result: Dictionary = world.cast_ability(1, "starter_slash", "training_slime")
 	if not bool(kill_result.get("accepted", false)):
 		push_error("Server world rejected a valid lethal ability for the loot test")
 		return false
-	var world_pickup: Dictionary = world.pickup_loot(3, 1)
+	var world_pickup: Dictionary = world.pickup_loot(1, 1)
 	if not bool(world_pickup.get("accepted", false)):
 		push_error("Server world did not route a valid loot pickup")
 		return false
-	if not world.move_player_to_zone(3, "dungeon"):
+	if not world.move_player_to_zone(1, "dungeon"):
 		push_error("Server world rejected zone transfer with an inventory")
 		return false
-	var transferred_snapshot: Dictionary = world.create_snapshots()[3]
+	var transferred_snapshot: Dictionary = world.create_snapshots()[1]
 	if transferred_snapshot.get("inventory", []) != [["starter_sword", 1]]:
 		push_error("Player inventory did not survive zone transfer")
 		return false
-	world.remove_player(3)
+	world.remove_player(1)
 	return true
