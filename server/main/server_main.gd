@@ -151,14 +151,21 @@ func _on_player_authenticated(peer_id: int) -> void:
 
 
 func _on_player_disconnected(peer_id: int) -> void:
-	_send_system_message("chat_system_player_left", peer_id)
+	# The peer that left the zone is no longer a valid recipient.
+	_send_system_message("chat_system_player_left", peer_id, peer_id)
 	server_world.remove_player(peer_id)
 
 
 ## Sends a system message to every player of the zone of the peer.
-func _send_system_message(system_key: String, peer_id: int) -> void:
+func _send_system_message(
+	system_key: String,
+	peer_id: int,
+	exclude_peer_id: int = -1,
+) -> void:
 	var system_message: Dictionary = server_world.build_system_message(system_key, peer_id)
 	for recipient_id: int in system_message["recipients"]:
+		if recipient_id == exclude_peer_id:
+			continue
 		server_listener.send_chat_message(recipient_id, system_message["message"])
 
 
