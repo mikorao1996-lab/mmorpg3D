@@ -31,7 +31,13 @@ static func parse(
 		"inventory_state": [],
 		"equipment_state": {},
 		"quest_states": [],
+		"gold": 0,
 	}
+
+	var gold_result: Dictionary = _parse_gold(snapshot)
+	if not bool(gold_result["ok"]):
+		return _fail(result, str(gold_result["error"]))
+	result["gold"] = gold_result["gold"]
 
 	var equipment_result: Dictionary = _parse_equipment(snapshot, game_data_registry)
 	if not bool(equipment_result["ok"]):
@@ -73,6 +79,18 @@ static func parse(
 		return _fail(result, str(inventory_result["error"]))
 	result["inventory_state"] = inventory_result["inventory_state"]
 
+	result["ok"] = true
+	return result
+
+
+## Parses the gold balance of the observing player.
+static func _parse_gold(snapshot: Dictionary) -> Dictionary:
+	var result: Dictionary = {"ok": false, "error": "", "gold": 0}
+	var gold_value: Variant = snapshot.get("gold", null)
+	if gold_value is not int or int(gold_value) < 0:
+		result["error"] = "malformed gold balance in world snapshot"
+		return result
+	result["gold"] = int(gold_value)
 	result["ok"] = true
 	return result
 

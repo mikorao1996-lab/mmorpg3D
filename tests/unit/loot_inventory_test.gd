@@ -55,6 +55,7 @@ func run() -> bool:
 	config["inventory_slot_count"] = 1
 	registries["mobs"]["training_slime"]["aggro_range"] = 0.0
 	registries["mobs"]["training_slime"]["loot_item_ids"] = ["starter_sword"]
+	registries["mobs"]["training_slime"]["loot_chances"] = []
 	var zone: RefCounted = ServerZoneType.new("starter", config, registries)
 	zone.add_player_at(1, Vector3.ZERO)
 	zone.add_player_at(2, Vector3(8.0, 0.0, 8.0))
@@ -107,6 +108,7 @@ func run() -> bool:
 	transfer_registry["mobs"]["training_slime"]["aggro_range"] = 0.0
 	transfer_registry["mobs"]["training_slime"]["health"] = 1.0
 	transfer_registry["mobs"]["training_slime"]["loot_item_ids"] = ["starter_sword"]
+	transfer_registry["mobs"]["training_slime"]["loot_chances"] = []
 	transfer_registry["abilities"]["starter_slash"]["cooldown_seconds"] = 0.0
 	transfer_registry["abilities"]["starter_slash"]["resource_cost"] = 0.0
 	transfer_registry["abilities"]["starter_slash"]["magnitude"] = 5.0

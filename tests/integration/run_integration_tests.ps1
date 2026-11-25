@@ -13,7 +13,8 @@ if ([string]::IsNullOrWhiteSpace($godotExecutable)) {
 $integrationScenes = @(
 	"res://tests/integration/network_loopback.tscn",
 	"res://tests/integration/client_ui_loopback.tscn",
-	"res://tests/integration/quest_loopback.tscn"
+	"res://tests/integration/quest_loopback.tscn",
+	"res://tests/integration/trade_loopback.tscn"
 )
 
 foreach ($integrationScene in $integrationScenes) {

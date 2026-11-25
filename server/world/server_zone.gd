@@ -9,6 +9,7 @@ const LootSystemType: GDScript = preload("res://server/systems/loot_system.gd")
 const ConsumableSystemType: GDScript = preload("res://server/systems/consumable_system.gd")
 const QuestSystemType: GDScript = preload("res://server/systems/quest_system.gd")
 const NpcSystemType: GDScript = preload("res://server/systems/npc_system.gd")
+const TradeSystemType: GDScript = preload("res://server/systems/trade_system.gd")
 const ZoneSnapshotBuilderType: GDScript = preload("res://server/systems/zone_snapshot_builder.gd")
 
 var zone_id: String
@@ -31,6 +32,8 @@ var _item_definitions: Dictionary = {}
 var _progression_definitions: Dictionary = {}
 var _quest_definitions: Dictionary = {}
 var _npc_definitions: Dictionary = {}
+var _vendor_definitions: Dictionary = {}
+var _starting_gold: int = 0
 var _mobs: Dictionary = {}
 var _npcs: Dictionary = {}
 var _loot_system: LootSystem = LootSystemType.new()
@@ -57,6 +60,8 @@ func _init(
 	_progression_definitions = game_data_registry["progression"]
 	_quest_definitions = game_data_registry["quests"]
 	_npc_definitions = game_data_registry["npcs"]
+	_vendor_definitions = game_data_registry["vendors"]
+	_starting_gold = int(config.get("starting_gold", 0))
 	_npcs = NpcSystemType.build_states(_npc_definitions)
 	for mob_id: String in _mob_definitions:
 		var definition: Dictionary = _mob_definitions[mob_id]
@@ -144,6 +149,23 @@ func award_experience(peer_id: int, amount: int) -> Dictionary:
 		"leveled_up": int(player_state["level"]) > old_level,
 		"level": int(player_state["level"]),
 		"experience": int(player_state["experience"]),
+	}
+
+
+## Awards gold to a player.
+##
+## The gold is the currency of the vertical slice: it is earned from quests and
+## from mob defeats and spent at a vendor.
+func award_gold(peer_id: int, amount: int) -> Dictionary:
+	if not _players.has(peer_id):
+		return {"ok": false, "error": "Player is not in this zone."}
+	if amount < 0:
+		return {"ok": false, "error": "Gold award must not be negative."}
+	var player_state: Dictionary = _players[peer_id]
+	player_state["gold"] = int(player_state.get("gold", 0)) + amount
+	return {
+		"ok": true,
+		"gold": int(player_state["gold"]),
 	}
 
 
@@ -272,8 +294,10 @@ func interact_npc(
 			"quests": [],
 			"quest_id": quest_id,
 			"reward_experience": 0,
+			"reward_gold": 0,
 			"reward_item_ids": [],
 			"grant_rewards": false,
+			"vendor_items": [],
 		}
 	var npc_state: Dictionary = NpcSystemType.get_npc_state(_npcs, npc_id)
 	var result: Dictionary = NpcSystemType.interact(
@@ -286,6 +310,7 @@ func interact_npc(
 		_quest_definitions,
 		_item_definitions,
 	)
+	result["vendor_items"] = _build_vendor_assortment(npc_id)
 	if not bool(result.get("grant_rewards", false)):
 		return result
 	_grant_quest_rewards(peer_id, quest_id, result)
@@ -297,7 +322,7 @@ func interact_npc(
 	return result
 
 
-## Grants the experience and the items of a handed-in quest.
+## Grants the experience, the gold, and the items of a handed-in quest.
 func _grant_quest_rewards(
 	peer_id: int,
 	quest_id: String,
@@ -326,7 +351,63 @@ func _grant_quest_rewards(
 			"Could not award quest experience for quest %s: %s"
 			% [quest_id, str(experience_result.get("error", "Unknown error."))]
 		)
+	var gold_result: Dictionary = award_gold(
+		peer_id,
+		int(quest_definition["reward_gold"]),
+	)
+	if not bool(gold_result.get("ok", false)):
+		push_error(
+			"Could not award quest gold for quest %s: %s"
+			% [quest_id, str(gold_result.get("error", "Unknown error."))]
+		)
 	QuestSystemType.mark_turned_in(_players[peer_id], quest_id)
+
+
+## Builds the assortment of the vendor that belongs to an NPC.
+##
+## An NPC that is not a vendor has an empty assortment, so the client simply
+## does not show a trade section.
+func _build_vendor_assortment(npc_id: String) -> Array:
+	var vendor: Dictionary = TradeSystemType.find_vendor(_vendor_definitions, npc_id)
+	if vendor.is_empty():
+		return []
+	return TradeSystemType.build_assortment(vendor)
+
+
+## Handles a trade request from a player.
+##
+## The vendor is resolved from the registry, so a request to an NPC that is
+## not a vendor is rejected. The trade system owns the price and the balance
+## check, so the client cannot influence what a trade costs.
+func trade(
+	peer_id: int,
+	npc_id: String,
+	action: String,
+	item_id: String,
+	quantity: int,
+) -> Dictionary:
+	if not _players.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"action": action,
+			"npc_id": npc_id,
+			"item_id": item_id,
+			"quantity": quantity,
+			"price": 0,
+			"gold": 0,
+		}
+	var vendor: Dictionary = TradeSystemType.find_vendor(_vendor_definitions, npc_id)
+	var result: Dictionary = TradeSystemType.trade(
+		_players[peer_id],
+		vendor,
+		action,
+		item_id,
+		quantity,
+		_item_definitions,
+	)
+	result["npc_id"] = npc_id
+	return result
 
 
 ## Records a mob defeat for the quests of the attacking player.
@@ -546,6 +627,7 @@ func _create_player_state(position: Vector3) -> Dictionary:
 		"max_resource": float(initial_definition["max_resource"]),
 		"level": 1,
 		"experience": 0,
+		"gold": _starting_gold,
 		"attack_multiplier": float(initial_definition["attack_multiplier"]),
 		"defense": float(initial_definition["defense"]),
 		"base_max_health": float(initial_definition["max_health"]),

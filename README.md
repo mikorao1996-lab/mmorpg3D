@@ -89,19 +89,36 @@ with their progress. The server counts kills, item pickups, and conversations,
 and hands out the reward of a quest only once. A hand-in is rejected when the
 reward does not fit into the inventory, so no experience is lost.
 
+Gold is the currency of the slice. The server pays it for quest hand-ins and
+mob defeats, it survives a zone transfer, and the status panel shows the
+balance the server reported. Talking to the vendor opens a trade section in
+the dialogue panel: **Buy** sends `TRADE_REQUEST` with the action `buy`,
+**Sell** sends it with `sell`. A request only names the item and the quantity;
+the price always comes from the vendor registry on the server, and the server
+checks the vendor, the assortment, the level requirement, the balance, and the
+inventory space before anything changes. A rejected trade leaves the balance
+and the inventory untouched.
+
+Mob loot is no longer a fixed list. Every item in a mob's `loot_item_ids`
+still drops on defeat, while the items in its `loot_chances` list only drop
+when the server rolls at or below their chance, so the rare equipment of the
+training guardian is a rare drop.
+
 The simulation config defines in-memory zones `starter` and `dungeon`; clients
 start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
 is available for server-validated transfers, but there is not yet a portal or
 zone-selection UI.
 
-The server loads the versioned item, ability, mob, quest, NPC, and progression
-JSON registries before listening. Their initial schema and cross-reference rules
-are described in [docs/data_registries.md](./docs/data_registries.md). The item
+The server loads the versioned item, ability, mob, quest, NPC, vendor, and
+progression JSON registries before listening. Their initial schema and
+cross-reference rules are described in
+[docs/data_registries.md](./docs/data_registries.md). The item
 catalog holds 18 items: three weapons, armor for all six slots, three
 consumables, and two quest items. Every equipment slot has at least one item
 that can be obtained from mob loot or a quest reward. The quest catalog holds
 five quests with kill, collect, and talk objectives, and two quest givers hand
-them out.
+them out. The vendor catalog holds one trader with an explicit assortment and
+explicit prices, which is the only place a trade price comes from.
 
 ## Unit checks
 
@@ -136,6 +153,12 @@ client scene: talk to the NPC, accept the quest, defeat the target mob, and
 hand the quest in. It checks that the dialogue panel lists the NPC quests, that
 the quest tracker reports the progress, and that the hand-in grants the reward
 exactly once.
+
+The fourth integration scene walks the full trade cycle against the production
+client scene: talk to the vendor, buy an item with the gold of the player,
+equip it, and see the stat bonus. It then forges a trade request against an
+NPC that does not trade and checks that the server rejects it and leaves the
+balance untouched.
 
 ## PostgreSQL driver spike
 

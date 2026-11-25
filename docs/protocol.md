@@ -2,7 +2,7 @@
 
 ## Bootstrap protocol constants
 
-- Protocol version: `7`
+- Protocol version: `8`
 - Snapshot channel: `0`, unreliable.
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
@@ -46,6 +46,8 @@ Opcodes:
 - `18`: `ITEM_USE_RESULT`
 - `19`: `NPC_INTERACT`
 - `20`: `NPC_INTERACT_RESULT`
+- `21`: `TRADE_REQUEST`
+- `22`: `TRADE_RESULT`
 
 Channel `0` is for unreliable snapshots. Channel `1` is reliable events.
 
@@ -75,8 +77,11 @@ snapshots are routed only within the player's current zone.
 Snapshots also contain `drops` entries in the form
 `[drop_id, item_id, position]` and the observing player's `inventory` as
 `[item_id, quantity]` slots. Drops are filtered to the observer's interest
-radius. Each configured mob loot item is a guaranteed drop for this vertical
-slice. Drops remain in the zone until picked up.
+radius. Every item in a mob's `loot_item_ids` is a guaranteed drop; every item
+in its `loot_chances` list only drops when the server rolls at or below its
+configured `chance`, so a rare item is a rare drop. A chance of `1.0` always
+drops and a chance of `0.0` never drops. Drops remain in the zone until picked
+up.
 `LOOT_PICKUP` is a reliable request containing `drop_id`; only authenticated
 peers can request pickup. The server verifies that the drop exists in the
 player's current zone, is within `loot_pickup_range`, and fits in the
@@ -123,19 +128,48 @@ can interact, and the server checks the NPC, the interaction distance from the
 NPC definition, the level requirement, the quest state, and the free inventory
 space before anything changes. `NPC_INTERACT_RESULT` reliably contains
 `accepted`, `reason`, `action`, `npc_id`, `npc_name_key`, `dialogue_key`, the
-`quests` list of the NPC, `quest_id`, `reward_experience`, and
-`reward_item_ids`. Every quest entry of the list contains `quest_id`,
-`name_key`, `status`, `progress`, `objective_count`, `objective_type`,
-`objective_target`, `min_level`, `reward_experience`, and `reward_item_ids`.
-The status is `available`, `active`, `completed`, or `turned_in`. Rejection
-reasons are `invalid_player`, `invalid_action`, `unknown_npc`, `out_of_range`,
-`unknown_quest`, `not_offered`, `level_requirement`, `already_active`,
-`already_turned_in`, `not_active`, `not_complete`, `inventory_full`, and
-`inventory_error`.
+`quests` list of the NPC, `quest_id`, `reward_experience`, `reward_gold`,
+`reward_item_ids`, and `vendor_items`. Every quest entry of the list contains
+`quest_id`, `name_key`, `status`, `progress`, `objective_count`, `objective_type`,
+`objective_target`, `min_level`, `reward_experience`, `reward_gold`, and
+`reward_item_ids`. The status is `available`, `active`, `completed`, or
+`turned_in`. Rejection reasons are `invalid_player`, `invalid_action`,
+`unknown_npc`, `out_of_range`, `unknown_quest`, `not_offered`,
+`level_requirement`, `already_active`, `already_turned_in`, `not_active`,
+`not_complete`, `inventory_full`, and `inventory_error`.
 
-The world snapshot of protocol version 7 additionally contains the `npcs` list
+The world snapshot of protocol version 8 additionally contains the `npcs` list
 with `[npc_id, position]` entries and the `quests` list of the observing
 player with `[quest_id, status, progress, objective_count, name_key,
 objective_type, objective_target]` entries. Quest progress is server
 authoritative: mob defeats, item pickups, and NPC conversations are counted on
 the server, and a quest can be handed in only once.
+
+## Currency and trading
+
+Gold is the currency of the vertical slice. The balance is server-authoritative:
+it starts at `starting_gold` from `resources/data/simulation.json`, is earned
+from quest hand-ins (`reward_gold`) and from mob defeats (`gold_reward`), and is
+spent at a vendor. The world snapshot carries the gold of the observing player
+in the top-level `gold` field, so the client only renders a value it received.
+
+`TRADE_REQUEST` requests contain `npc_id`, `action`, `item_id`, and `quantity`.
+Supported actions are `buy` and `sell`. Only authenticated peers can trade. The
+request never carries a price: the server reads the price from the vendor
+registry, so a client cannot change what an item costs. The server also checks
+that the NPC is a vendor, that the item is in the assortment of that vendor,
+that the quantity is between `1` and `20`, that the level requirement of the
+item is met for a purchase, that the balance covers the total price, and that
+the inventory has room for the delivered items. Every check runs before the
+balance or the inventory is touched, so a rejected trade leaves both of them
+exactly as they were. `TRADE_RESULT` reliably contains `accepted`, `reason`,
+`action`, `npc_id`, `item_id`, `quantity`, `price`, and the resulting `gold`.
+Rejection reasons are `invalid_player`, `invalid_action`, `not_a_vendor`,
+`invalid_quantity`, `item_not_traded`, `unknown_item`, `item_not_for_sale`,
+`item_not_accepted`, `level_requirement`, `insufficient_gold`,
+`inventory_full`, and `item_not_in_inventory`.
+
+The `vendor_items` list of an `NPC_INTERACT_RESULT` carries the assortment of a
+vendor as `item_id`, `buy_price`, and `sell_price` entries, and is empty for an
+NPC that is not a vendor. The client renders those prices, but every trade is
+priced by the server again.

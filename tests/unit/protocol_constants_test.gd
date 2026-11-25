@@ -4,7 +4,7 @@ const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_
 
 
 func run() -> bool:
-	if ProtocolConstantsType.PROTOCOL_VERSION != 7:
+	if ProtocolConstantsType.PROTOCOL_VERSION != 8:
 		push_error("Unexpected protocol version")
 		return false
 	if (
@@ -30,6 +30,20 @@ func run() -> bool:
 		== ProtocolConstantsType.OPCODE_NPC_INTERACT_RESULT
 	):
 		push_error("NPC interaction request and result opcodes must differ")
+		return false
+	if (
+		ProtocolConstantsType.OPCODE_TRADE_REQUEST
+		== ProtocolConstantsType.OPCODE_TRADE_RESULT
+	):
+		push_error("Trade request and result opcodes must differ")
+		return false
+	if (
+		ProtocolConstantsType.OPCODE_TRADE_REQUEST
+		== ProtocolConstantsType.OPCODE_NPC_INTERACT
+		or ProtocolConstantsType.OPCODE_TRADE_RESULT
+		== ProtocolConstantsType.OPCODE_NPC_INTERACT_RESULT
+	):
+		push_error("Trade opcodes must not collide with the NPC opcodes")
 		return false
 	if ProtocolConstantsType.MAX_PACKET_SIZE_BYTES <= 0:
 		push_error("Packet size limit must be positive")

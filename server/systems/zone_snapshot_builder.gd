@@ -96,6 +96,7 @@ static func build(
 	return {
 		"zone_id": str(zone_data["zone_id"]),
 		"server_time_ms": Time.get_ticks_msec(),
+		"gold": int(observer_state.get("gold", 0)),
 		"players": player_states,
 		"mobs": mob_states,
 		"npcs": npc_states,

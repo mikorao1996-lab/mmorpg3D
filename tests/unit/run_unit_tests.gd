@@ -15,6 +15,9 @@ const ConsumableTest: GDScript = preload("res://tests/unit/consumable_test.gd")
 const InventoryPanelTest: GDScript = preload("res://tests/unit/inventory_panel_test.gd")
 const QuestSystemTest: GDScript = preload("res://tests/unit/quest_system_test.gd")
 const NpcRegistryTest: GDScript = preload("res://tests/unit/npc_registry_test.gd")
+const TradeSystemTest: GDScript = preload("res://tests/unit/trade_system_test.gd")
+const LootChanceTest: GDScript = preload("res://tests/unit/loot_chance_test.gd")
+const CurrencyTest: GDScript = preload("res://tests/unit/currency_test.gd")
 
 
 func _initialize() -> void:
@@ -61,6 +64,15 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not NpcRegistryTest.new().run():
+		quit(1)
+		return
+	if not TradeSystemTest.new().run():
+		quit(1)
+		return
+	if not LootChanceTest.new().run():
+		quit(1)
+		return
+	if not CurrencyTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

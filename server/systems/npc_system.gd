@@ -78,6 +78,7 @@ static func build_quest_list(
 			"objective_target": str(quest_definition["objective_target"]),
 			"min_level": int(quest_definition["min_level"]),
 			"reward_experience": int(quest_definition["reward_experience"]),
+			"reward_gold": int(quest_definition["reward_gold"]),
 			"reward_item_ids": (quest_definition["reward_item_ids"] as Array).duplicate(),
 		})
 	return quest_list
@@ -109,8 +110,10 @@ static func interact(
 		"quests": [],
 		"quest_id": quest_id,
 		"reward_experience": 0,
+		"reward_gold": 0,
 		"reward_item_ids": [],
 		"grant_rewards": false,
+		"vendor_items": [],
 	}
 	if not ACTIONS.has(action):
 		result["reason"] = "invalid_action"
@@ -163,6 +166,7 @@ static func interact(
 	var quest_definition: Dictionary = quest_definitions[quest_id]
 	result["accepted"] = true
 	result["reward_experience"] = int(quest_definition["reward_experience"])
+	result["reward_gold"] = int(quest_definition["reward_gold"])
 	result["reward_item_ids"] = (quest_definition["reward_item_ids"] as Array).duplicate()
 	result["grant_rewards"] = true
 	return result

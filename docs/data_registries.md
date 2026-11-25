@@ -1,12 +1,12 @@
 # Game data registries
 
 The server loads all registries through `GameDataRegistry.load_all()` before
-opening its ENet listener. Item, ability, mob, quest, NPC, and progression files
-use a versioned root object:
+opening its ENet listener. Item, ability, mob, quest, NPC, vendor, and progression
+files use a versioned root object:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": []
 }
 ```
@@ -49,13 +49,19 @@ File: `resources/data/mobs.json`
 
 - `id`, `name_key`: non-empty strings.
 - `is_boss`: boolean that marks a mini-boss for client presentation.
-- `level`: integer >= 1; `experience_reward` is an integer >= 0; `health` > 0.
+- `level`: integer >= 1; `experience_reward` and `gold_reward` are integers >= 0;
+  `health` > 0.
 - `attack`, `defense`, `move_speed`, `aggro_range`, `attack_range`: finite numbers >= 0.
 - `attack_interval_seconds` and `respawn_seconds`: finite numbers > 0.
 - `spawn_position`: three finite numeric coordinates; `visual_radius` and
   `visual_height` are finite numbers > 0.
 - `loot_item_ids`: unique item IDs; each must exist in the item registry.
-  The combat slice uses spawn/visual fields to initialize and render zone-local
+  Every listed item is a guaranteed drop on defeat.
+- `loot_chances`: list of `{item_id, chance}` entries; each item must exist and
+  each chance is a number between `0` and `1`. The item only drops when the
+  server rolls at or below the chance, so `1.0` always drops and `0.0` never
+  drops.
+- The combat slice uses spawn/visual fields to initialize and render zone-local
   mobs, and the aggro/attack fields to drive server-authoritative mob AI.
   Configured loot items drop on defeat; bosses use the same server-authoritative
   combat and loot rules with their own data-defined stats. The current catalog
@@ -83,6 +89,7 @@ File: `resources/data/quests.json`
 - `min_level`, `objective_count`: integers >= 1.
 - `objective_type`: `kill`, `collect`, or `talk`.
 - `reward_experience`: integer >= 0.
+- `reward_gold`: integer >= 0; the gold a handed-in quest pays out.
 - `reward_item_ids`: unique item IDs; each must exist.
 - `kill` objectives must reference a registered mob; `collect` objectives must
   reference a registered item; `talk` objectives must reference a registered NPC.
@@ -101,9 +108,36 @@ File: `resources/data/npcs.json`
 - `spawn_position`: three finite numbers; the world position of the NPC.
 - `interaction_range`: number > 0; the distance in world units in which the
   player may interact with the NPC.
-- `quest_ids`: unique quest IDs; each must exist in the quest registry.
+- `quest_ids`: unique quest IDs; each must exist in the quest registry. An NPC
+  that is a vendor may have an empty list.
+
+## Simulation config
+
+File: `resources/data/simulation.json`
+
+- `starting_gold`: integer >= 0; the gold balance a player starts with. The
+  balance is earned from quests and mob defeats and is spent at a vendor.
+- The remaining keys configure the simulation step, the movement, the interest
+  radius, the snapshot rate, and the inventory size.
+
+## Vendors
+
+File: `resources/data/vendors.json`
+
+- `id`: non-empty string.
+- `npc_id`: the NPC that serves the vendor; it must exist in the NPC registry
+  and only one vendor may serve an NPC.
+- `items`: a non-empty list of `{item_id, buy_price, sell_price}` entries. Each
+  item must exist in the item registry, and each price is an integer >= 0.
+  `buy_price` is what the player pays, `sell_price` is what the vendor pays.
+  An item with a `buy_price` of zero is not sold, and an item with a
+  `sell_price` of zero is not bought back.
+
+The vendor registry is the only source of prices: a trade request never carries
+a price, and the server resolves the price of the traded item from this
+registry again for every trade.
 
 `GameDataRegistry.load_all()` returns dictionaries keyed by entry ID under
-`items`, `abilities`, `mobs`, `progression`, `quests`, and `npcs`. These are
-initial schema contracts; database persistence and the trade and chat systems
+`items`, `abilities`, `mobs`, `progression`, `quests`, `npcs`, and `vendors`.
+These are initial schema contracts; database persistence and the chat system
 are separate Phase 5 work.

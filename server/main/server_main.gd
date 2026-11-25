@@ -55,6 +55,7 @@ func _ready() -> void:
 	server_listener.unequip_item_requested.connect(_on_unequip_item_requested)
 	server_listener.use_item_requested.connect(_on_use_item_requested)
 	server_listener.npc_interact_requested.connect(_on_npc_interact_requested)
+	server_listener.trade_requested.connect(_on_trade_requested)
 	if not server_listener.start():
 		get_tree().quit(2)
 
@@ -118,3 +119,20 @@ func _on_npc_interact_requested(
 ) -> void:
 	var result: Dictionary = server_world.interact_npc(peer_id, npc_id, action, quest_id)
 	server_listener.send_npc_interact_result(peer_id, result)
+
+
+func _on_trade_requested(
+	peer_id: int,
+	npc_id: String,
+	action: String,
+	item_id: String,
+	quantity: int,
+) -> void:
+	var result: Dictionary = server_world.trade(
+		peer_id,
+		npc_id,
+		action,
+		item_id,
+		quantity,
+	)
+	server_listener.send_trade_result(peer_id, result)

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": [
     {
       "id": "slime_problem",
@@ -9,6 +9,7 @@
       "objective_target": "training_slime",
       "objective_count": 3,
       "reward_experience": 25,
+      "reward_gold": 15,
       "reward_item_ids": [
         "minor_potion",
         "leather_hood",
@@ -23,6 +24,7 @@
       "objective_target": "training_wolf",
       "objective_count": 2,
       "reward_experience": 40,
+      "reward_gold": 25,
       "reward_item_ids": [
         "worn_boots",
         "leather_greaves"
@@ -36,6 +38,7 @@
       "objective_target": "wolf_pelt",
       "objective_count": 2,
       "reward_experience": 30,
+      "reward_gold": 20,
       "reward_item_ids": [
         "iron_boots"
       ]
@@ -48,6 +51,7 @@
       "objective_target": "slime_gel",
       "objective_count": 3,
       "reward_experience": 20,
+      "reward_gold": 12,
       "reward_item_ids": [
         "cloth_wraps"
       ]
@@ -60,6 +64,7 @@
       "objective_target": "quest_giver_mira",
       "objective_count": 1,
       "reward_experience": 15,
+      "reward_gold": 10,
       "reward_item_ids": [
         "minor_potion"
       ]

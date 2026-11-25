@@ -35,6 +35,7 @@ var _npc_views: Dictionary = {}
 var _quest_states: Array = []
 var _inventory_state: Array[Dictionary] = []
 var _equipment_state: Dictionary = {}
+var _gold: int = 0
 var _slash_key_down: bool = false
 var _heavy_strike_key_down: bool = false
 var _guard_break_key_down: bool = false
@@ -69,6 +70,7 @@ func _ready() -> void:
 	npc_dialog_panel.setup(_game_data_registry["items"], _game_data_registry["mobs"])
 	npc_dialog_panel.accept_quest_requested.connect(_on_accept_quest_requested)
 	npc_dialog_panel.turn_in_quest_requested.connect(_on_turn_in_quest_requested)
+	npc_dialog_panel.trade_requested.connect(_on_trade_requested)
 	quest_tracker_panel.setup(_game_data_registry["items"], _game_data_registry["mobs"])
 	_client_net = ClientNet.new()
 	add_child(_client_net)
@@ -81,6 +83,7 @@ func _ready() -> void:
 	_client_net.equipment_action_completed.connect(_on_equipment_action_completed)
 	_client_net.item_use_completed.connect(_on_item_use_completed)
 	_client_net.npc_interaction_completed.connect(_on_npc_interaction_completed)
+	_client_net.trade_completed.connect(_on_trade_completed)
 
 	var error: Error = _client_net.connect_to_server(_server_address, _server_port)
 	if error != OK:
@@ -317,6 +320,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	_quest_states = new_quest_states
 	_inventory_state = inventory_state
 	_equipment_state = equipment_state
+	_gold = int(parsed["gold"])
 	var existing_npc_ids: Array = _npc_views.keys()
 	for npc_id: String in existing_npc_ids:
 		if not _npc_states.has(npc_id):
@@ -569,7 +573,16 @@ func _update_combat_status() -> void:
 	if not equipment_names.is_empty():
 		equipment_summary = ", ".join(equipment_names)
 	var equipment_line: String = tr("equipment_status") % equipment_summary
-	status_label.text = combat_summary + "\n" + inventory_line + "\n" + equipment_line
+	var gold_line: String = tr("gold_status") % _gold
+	status_label.text = (
+		combat_summary
+		+ "\n"
+		+ inventory_line
+		+ "\n"
+		+ equipment_line
+		+ "\n"
+		+ gold_line
+	)
 
 
 func _on_equip_requested(item_id: String) -> void:
@@ -663,7 +676,9 @@ func _on_npc_interaction_completed(
 	quests: Array,
 	quest_id: String,
 	reward_experience: int,
+	reward_gold: int,
 	reward_item_ids: Array,
+	vendor_items: Array,
 ) -> void:
 	if not accepted:
 		status_label.text = tr("interact_failed") % tr("interact_reason_" + reason)
@@ -676,10 +691,59 @@ func _on_npc_interaction_completed(
 			reward_names.append(tr(str(item_definition.get("name_key", item_id))))
 		status_label.text = tr("quest_turn_in_success") % [
 			reward_experience,
+			reward_gold,
 			", ".join(reward_names),
 		]
 		_combat_message_time_remaining = 2.0
-	npc_dialog_panel.show_npc(npc_id, npc_name_key, dialogue_key, quests)
+	var local_state: Dictionary = _player_health_states.get(_local_player_id, {})
+	npc_dialog_panel.show_npc(
+		npc_id,
+		npc_name_key,
+		dialogue_key,
+		quests,
+		vendor_items,
+		_inventory_state,
+		_gold,
+		int(local_state.get("level", 1)),
+	)
+
+
+## Sends a trade request to the server.
+##
+## The request only names the action, the item, and the quantity; the price is
+## decided by the server.
+func _on_trade_requested(
+	npc_id: String,
+	action: String,
+	item_id: String,
+	quantity: int,
+) -> void:
+	var error: Error = _client_net.request_trade(npc_id, action, item_id, quantity)
+	if error != OK:
+		push_warning("Could not request trade: %s" % error)
+
+
+func _on_trade_completed(
+	accepted: bool,
+	reason: String,
+	action: String,
+	npc_id: String,
+	item_id: String,
+	quantity: int,
+	price: int,
+	gold: int,
+) -> void:
+	if not accepted:
+		status_label.text = tr("trade_failed") % tr("trade_reason_" + reason)
+		_combat_message_time_remaining = 2.0
+		return
+	var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
+	var item_name: String = tr(str(item_definition.get("name_key", item_id)))
+	if action == "buy":
+		status_label.text = tr("trade_buy_success") % [item_name, quantity, price * quantity]
+	else:
+		status_label.text = tr("trade_sell_success") % [item_name, quantity, price * quantity]
+	_combat_message_time_remaining = 2.0
 
 
 func _request_nearest_loot() -> void:

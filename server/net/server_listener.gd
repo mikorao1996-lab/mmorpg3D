@@ -11,6 +11,13 @@ signal equip_item_requested(peer_id: int, item_id: String)
 signal unequip_item_requested(peer_id: int, slot_id: String)
 signal use_item_requested(peer_id: int, item_id: String)
 signal npc_interact_requested(peer_id: int, npc_id: String, action: String, quest_id: String)
+signal trade_requested(
+	peer_id: int,
+	npc_id: String,
+	action: String,
+	item_id: String,
+	quantity: int,
+)
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
@@ -99,6 +106,8 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 		handle_use_item(session, peer_id, payload)
 	elif opcode == ProtocolConstantsType.OPCODE_NPC_INTERACT:
 		handle_npc_interact(session, peer_id, payload)
+	elif opcode == ProtocolConstantsType.OPCODE_TRADE_REQUEST:
+		handle_trade_request(session, peer_id, payload)
 	else:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
@@ -226,6 +235,40 @@ func handle_npc_interact(session: RefCounted, peer_id: int, payload: Dictionary)
 		npc_id_value,
 		action_value,
 		quest_id_value,
+	)
+
+
+## Handles a trade request.
+##
+## The request only names the NPC, the action, the item, and the quantity. The
+## price is never part of the request: the server reads it from the vendor
+## registry, so a client cannot change what an item costs.
+func handle_trade_request(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
+	if not session.authenticated:
+		push_warning("Trade request before authentication from peer %d" % peer_id)
+		return
+	var npc_id_value: Variant = payload.get("npc_id")
+	var action_value: Variant = payload.get("action")
+	var item_id_value: Variant = payload.get("item_id")
+	var quantity_value: Variant = payload.get("quantity", 1)
+	if npc_id_value is not String or npc_id_value.strip_edges().is_empty():
+		push_warning("Rejected malformed trade request from peer %d" % peer_id)
+		return
+	if action_value is not String or action_value.strip_edges().is_empty():
+		push_warning("Rejected malformed trade action from peer %d" % peer_id)
+		return
+	if item_id_value is not String or item_id_value.strip_edges().is_empty():
+		push_warning("Rejected malformed trade item from peer %d" % peer_id)
+		return
+	if quantity_value is not int or quantity_value < 1:
+		push_warning("Rejected malformed trade quantity from peer %d" % peer_id)
+		return
+	trade_requested.emit(
+		peer_id,
+		npc_id_value,
+		action_value,
+		item_id_value,
+		quantity_value,
 	)
 
 
@@ -369,13 +412,41 @@ func send_npc_interact_result(peer_id: int, result: Dictionary) -> void:
 			"quests": result.get("quests", []),
 			"quest_id": str(result.get("quest_id", "")),
 			"reward_experience": int(result.get("reward_experience", 0)),
+			"reward_gold": int(result.get("reward_gold", 0)),
 			"reward_item_ids": result.get("reward_item_ids", []),
+			"vendor_items": result.get("vendor_items", []),
 		},
 	)
 	if send_error != OK:
 		push_warning(
 			"Failed to send NPC interaction result to peer %d: %s" % [peer_id, send_error]
 		)
+
+
+## Sends the result of a trade to the client.
+func send_trade_result(peer_id: int, result: Dictionary) -> void:
+	if not sessions.has(peer_id):
+		push_warning("Cannot send trade result to missing peer %d" % peer_id)
+		return
+	var session: RefCounted = sessions[peer_id]
+	if not session.authenticated:
+		push_warning("Cannot send trade result to unauthenticated peer %d" % peer_id)
+		return
+	var send_error: Error = session.send(
+		ProtocolConstantsType.OPCODE_TRADE_RESULT,
+		{
+			"accepted": bool(result.get("accepted", false)),
+			"reason": str(result.get("reason", "trade_error")),
+			"action": str(result.get("action", "buy")),
+			"npc_id": str(result.get("npc_id", "")),
+			"item_id": str(result.get("item_id", "")),
+			"quantity": int(result.get("quantity", 0)),
+			"price": int(result.get("price", 0)),
+			"gold": int(result.get("gold", 0)),
+		},
+	)
+	if send_error != OK:
+		push_warning("Failed to send trade result to peer %d: %s" % [peer_id, send_error])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

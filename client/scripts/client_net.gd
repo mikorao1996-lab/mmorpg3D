@@ -44,7 +44,19 @@ signal npc_interaction_completed(
 	quests: Array,
 	quest_id: String,
 	reward_experience: int,
+	reward_gold: int,
 	reward_item_ids: Array,
+	vendor_items: Array,
+)
+signal trade_completed(
+	accepted: bool,
+	reason: String,
+	action: String,
+	npc_id: String,
+	item_id: String,
+	quantity: int,
+	price: int,
+	gold: int,
 )
 
 var peer: ENetMultiplayerPeer
@@ -233,7 +245,9 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 			var interact_quests: Variant = payload.get("quests", null)
 			var interact_quest_id: Variant = payload.get("quest_id", null)
 			var interact_reward_experience: Variant = payload.get("reward_experience", null)
+			var interact_reward_gold: Variant = payload.get("reward_gold", null)
 			var interact_reward_items: Variant = payload.get("reward_item_ids", null)
+			var interact_vendor_items: Variant = payload.get("vendor_items", null)
 			if (
 				interact_accepted is not bool
 				or interact_reason is not String
@@ -244,7 +258,9 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 				or not interact_quests is Array
 				or interact_quest_id is not String
 				or not _is_number(interact_reward_experience)
+				or not _is_number(interact_reward_gold)
 				or not interact_reward_items is Array
+				or not interact_vendor_items is Array
 			):
 				push_warning("Rejected malformed NPC interaction result")
 				return
@@ -258,7 +274,40 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 				interact_quests,
 				interact_quest_id,
 				int(interact_reward_experience),
+				int(interact_reward_gold),
 				interact_reward_items,
+				interact_vendor_items,
+			)
+		ProtocolConstantsType.OPCODE_TRADE_RESULT:
+			var trade_accepted: Variant = payload.get("accepted", null)
+			var trade_reason: Variant = payload.get("reason", null)
+			var trade_action: Variant = payload.get("action", null)
+			var trade_npc_id: Variant = payload.get("npc_id", null)
+			var trade_item_id: Variant = payload.get("item_id", null)
+			var trade_quantity: Variant = payload.get("quantity", null)
+			var trade_price: Variant = payload.get("price", null)
+			var trade_gold: Variant = payload.get("gold", null)
+			if (
+				trade_accepted is not bool
+				or trade_reason is not String
+				or trade_action is not String
+				or trade_npc_id is not String
+				or trade_item_id is not String
+				or not trade_quantity is int
+				or not trade_price is int
+				or not trade_gold is int
+			):
+				push_warning("Rejected malformed trade result")
+				return
+			trade_completed.emit(
+				trade_accepted,
+				trade_reason,
+				trade_action,
+				trade_npc_id,
+				trade_item_id,
+				trade_quantity,
+				trade_price,
+				trade_gold,
 			)
 
 
@@ -356,6 +405,34 @@ func request_npc_interact(
 		"npc_id": npc_id,
 		"action": action,
 		"quest_id": quest_id,
+	})
+
+
+## Requests a trade with a vendor.
+##
+## The request names the action (`buy` or `sell`), the item, and the quantity.
+## The price is decided by the server, so it is not part of the request.
+func request_trade(
+	npc_id: String,
+	action: String,
+	item_id: String,
+	quantity: int = 1,
+) -> Error:
+	if not is_connected:
+		return ERR_UNCONFIGURED
+	if (
+		npc_id.strip_edges().is_empty()
+		or action.strip_edges().is_empty()
+		or item_id.strip_edges().is_empty()
+	):
+		return ERR_INVALID_PARAMETER
+	if quantity < 1:
+		return ERR_INVALID_PARAMETER
+	return send_packet(ProtocolConstantsType.OPCODE_TRADE_REQUEST, {
+		"npc_id": npc_id,
+		"action": action,
+		"item_id": item_id,
+		"quantity": quantity,
 	})
 
 

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": [
     {
       "id": "training_slime",
@@ -7,6 +7,7 @@
       "is_boss": false,
       "level": 1,
       "experience_reward": 25,
+      "gold_reward": 4,
       "health": 30,
       "attack": 3,
       "defense": 0,
@@ -21,6 +22,16 @@
       "loot_item_ids": [
         "minor_potion",
         "slime_gel"
+      ],
+      "loot_chances": [
+        {
+          "item_id": "leather_hood",
+          "chance": 0.25
+        },
+        {
+          "item_id": "cloth_wraps",
+          "chance": 0.15
+        }
       ]
     },
     {
@@ -29,6 +40,7 @@
       "is_boss": false,
       "level": 2,
       "experience_reward": 40,
+      "gold_reward": 8,
       "health": 42,
       "attack": 5,
       "defense": 1,
@@ -41,9 +53,18 @@
       "visual_radius": 0.45,
       "visual_height": 0.9,
       "loot_item_ids": [
-        "worn_boots",
         "wolf_pelt",
         "minor_potion"
+      ],
+      "loot_chances": [
+        {
+          "item_id": "worn_boots",
+          "chance": 0.4
+        },
+        {
+          "item_id": "iron_boots",
+          "chance": 0.12
+        }
       ]
     },
     {
@@ -52,6 +73,7 @@
       "is_boss": true,
       "level": 5,
       "experience_reward": 120,
+      "gold_reward": 30,
       "health": 160,
       "attack": 11,
       "defense": 2,
@@ -64,10 +86,37 @@
       "visual_radius": 0.75,
       "visual_height": 1.8,
       "loot_item_ids": [
-        "padded_vest",
-        "iron_gauntlets",
-        "iron_sword",
         "greater_potion"
+      ],
+      "loot_chances": [
+        {
+          "item_id": "padded_vest",
+          "chance": 0.6
+        },
+        {
+          "item_id": "iron_gauntlets",
+          "chance": 0.5
+        },
+        {
+          "item_id": "iron_sword",
+          "chance": 0.5
+        },
+        {
+          "item_id": "iron_helm",
+          "chance": 0.3
+        },
+        {
+          "item_id": "iron_chestplate",
+          "chance": 0.25
+        },
+        {
+          "item_id": "iron_greaves",
+          "chance": 0.2
+        },
+        {
+          "item_id": "battle_axe",
+          "chance": 0.15
+        }
       ]
     }
   ]

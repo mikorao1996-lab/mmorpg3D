@@ -68,6 +68,8 @@ func run() -> bool:
 	for mob: Dictionary in registries["mobs"].values():
 		for item_id: String in mob["loot_item_ids"]:
 			obtainable_items[item_id] = true
+		for chance_entry: Dictionary in mob["loot_chances"]:
+			obtainable_items[str(chance_entry["item_id"])] = true
 	for quest: Dictionary in registries["quests"].values():
 		for item_id: String in quest["reward_item_ids"]:
 			obtainable_items[item_id] = true

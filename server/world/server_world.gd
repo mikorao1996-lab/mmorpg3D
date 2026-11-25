@@ -163,6 +163,15 @@ func cast_ability(peer_id: int, ability_id: String, target_mob_id: String) -> Di
 				"Could not award experience to peer %d: %s"
 				% [peer_id, str(experience_result.get("error", "Unknown error."))],
 			)
+		var gold_result: Dictionary = zone.award_gold(
+			peer_id,
+			int(mob_definition["gold_reward"]),
+		)
+		if not bool(gold_result.get("ok", false)):
+			push_error(
+				"Could not award gold to peer %d: %s"
+				% [peer_id, str(gold_result.get("error", "Unknown error."))],
+			)
 		var loot_result: Dictionary = zone.spawn_loot_for_mob(target_mob_id)
 		if not bool(loot_result.get("ok", false)):
 			push_error(
@@ -244,10 +253,35 @@ func interact_npc(
 			"quests": [],
 			"quest_id": quest_id,
 			"reward_experience": 0,
+			"reward_gold": 0,
 			"reward_item_ids": [],
+			"vendor_items": [],
 		}
 	var zone: RefCounted = _zones[_peer_zones[peer_id]]
 	return zone.interact_npc(peer_id, npc_id, action, quest_id)
+
+
+## Routes a trade request to the zone of the player.
+func trade(
+	peer_id: int,
+	npc_id: String,
+	action: String,
+	item_id: String,
+	quantity: int,
+) -> Dictionary:
+	if not _peer_zones.has(peer_id):
+		return {
+			"accepted": false,
+			"reason": "invalid_player",
+			"action": action,
+			"npc_id": npc_id,
+			"item_id": item_id,
+			"quantity": quantity,
+			"price": 0,
+			"gold": 0,
+		}
+	var zone: RefCounted = _zones[_peer_zones[peer_id]]
+	return zone.trade(peer_id, npc_id, action, item_id, quantity)
 
 
 func advance(delta: float) -> bool:

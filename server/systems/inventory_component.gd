@@ -63,6 +63,15 @@ func has_item(item_id: String) -> bool:
 	return false
 
 
+## Reports how many units of the item are held.
+func get_item_count(item_id: String) -> int:
+	var count: int = 0
+	for slot: Dictionary in _slots:
+		if slot["item_id"] == item_id:
+			count += int(slot["quantity"])
+	return count
+
+
 ## Simulates adding the items and reports whether all of them would fit.
 ##
 ## The inventory is left untouched, so this can be used to validate a reward

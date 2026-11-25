@@ -8,6 +8,7 @@ const REGISTRY_PATHS: Dictionary = {
 	"progression": "res://resources/data/progression.json",
 	"quests": "res://resources/data/quests.json",
 	"npcs": "res://resources/data/npcs.json",
+	"vendors": "res://resources/data/vendors.json",
 }
 const ITEM_TYPES: PackedStringArray = ["weapon", "armor", "consumable", "quest"]
 const EQUIPMENT_SLOTS: PackedStringArray = [
@@ -23,7 +24,7 @@ const TARGET_TYPES: PackedStringArray = ["self", "ally", "enemy"]
 const ABILITY_EFFECT_TYPES: PackedStringArray = ["damage", "heal", "buff"]
 const QUEST_OBJECTIVE_TYPES: PackedStringArray = ["kill", "collect", "talk"]
 const ITEM_STAT_KEYS: PackedStringArray = ["attack", "defense", "health", "resource"]
-const SCHEMA_VERSION: int = 1
+const SCHEMA_VERSION: int = 2
 const MAX_CHARACTER_LEVEL: int = 10
 
 
@@ -176,6 +177,8 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 				or not _is_number_greater_than(entry.get("visual_radius"), 0.0)
 				or not _is_number_greater_than(entry.get("visual_height"), 0.0)
 				or not _is_string_array(entry.get("loot_item_ids"))
+				or not _is_integer_at_least(entry.get("gold_reward"), 0)
+				or not _is_loot_chance_array(entry.get("loot_chances"))
 			):
 				return "invalid mob fields"
 		"progression":
@@ -197,6 +200,7 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 				or not _is_non_empty_string(entry.get("objective_target"))
 				or not _is_integer_at_least(entry.get("objective_count"), 1)
 				or not _is_integer_at_least(entry.get("reward_experience"), 0)
+				or not _is_integer_at_least(entry.get("reward_gold"), 0)
 				or not _is_string_array(entry.get("reward_item_ids"))
 			):
 				return "invalid quest fields"
@@ -209,6 +213,12 @@ static func validate_entry(registry_name: String, entry: Dictionary) -> String:
 				or not _is_string_array(entry.get("quest_ids"))
 			):
 				return "invalid npc fields"
+		"vendors":
+			if (
+				not _is_non_empty_string(entry.get("npc_id"))
+				or not _is_vendor_item_array(entry.get("items"))
+			):
+				return "invalid vendor fields"
 		_:
 			return "unknown game data registry: %s" % registry_name
 	return ""
@@ -246,6 +256,7 @@ static func validate_references(registries: Dictionary) -> String:
 		or not registries.has("progression")
 		or not registries.has("quests")
 		or not registries.has("npcs")
+		or not registries.has("vendors")
 	):
 		return "Game data registries are missing required collections"
 	var items: Dictionary = registries["items"]
@@ -286,6 +297,12 @@ static func validate_references(registries: Dictionary) -> String:
 		for item_id: String in mob["loot_item_ids"]:
 			if not items.has(item_id):
 				return "Mob %s references unknown loot item %s" % [mob["id"], item_id]
+		for chance_entry: Dictionary in mob["loot_chances"]:
+			if not items.has(chance_entry["item_id"]):
+				return (
+					"Mob %s references unknown loot chance item %s"
+					% [mob["id"], chance_entry["item_id"]]
+				)
 
 	var npcs: Dictionary = registries["npcs"]
 	for quest: Dictionary in registries["quests"].values():
@@ -305,6 +322,18 @@ static func validate_references(registries: Dictionary) -> String:
 		for quest_id: String in npc["quest_ids"]:
 			if not registries["quests"].has(quest_id):
 				return "NPC %s references unknown quest %s" % [npc["id"], quest_id]
+
+	var vendors: Dictionary = registries["vendors"]
+	for vendor: Dictionary in vendors.values():
+		var npc_id: String = vendor["npc_id"]
+		if not npcs.has(npc_id):
+			return "Vendor %s references unknown NPC %s" % [vendor["id"], npc_id]
+		for vendor_item: Dictionary in vendor["items"]:
+			if not items.has(vendor_item["item_id"]):
+				return (
+					"Vendor %s references unknown item %s"
+					% [vendor["id"], vendor_item["item_id"]]
+				)
 	return ""
 
 
@@ -345,6 +374,50 @@ static func _is_string_array(value: Variant) -> bool:
 		if not _is_non_empty_string(item) or seen.has(item):
 			return false
 		seen[item] = true
+	return true
+
+
+## Probabilistic loot entries reference an item and a chance inside 0..1.
+static func _is_loot_chance_array(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	var seen: Dictionary = {}
+	for entry_value: Variant in value:
+		if not entry_value is Dictionary:
+			return false
+		var entry: Dictionary = entry_value
+		var item_id: String = str(entry.get("item_id", ""))
+		var chance: float = float(entry.get("chance", -1.0))
+		if (
+			item_id.is_empty()
+			or seen.has(item_id)
+			or not _is_finite_number(entry.get("chance", null))
+			or chance < 0.0
+			or chance > 1.0
+		):
+			return false
+		seen[item_id] = true
+	return true
+
+
+## Vendor assortments list every traded item with explicit buy and sell prices.
+static func _is_vendor_item_array(value: Variant) -> bool:
+	if not value is Array or value.is_empty():
+		return false
+	var seen: Dictionary = {}
+	for entry_value: Variant in value:
+		if not entry_value is Dictionary:
+			return false
+		var entry: Dictionary = entry_value
+		var item_id: String = str(entry.get("item_id", ""))
+		if (
+			item_id.is_empty()
+			or seen.has(item_id)
+			or not _is_integer_at_least(entry.get("buy_price"), 0)
+			or not _is_integer_at_least(entry.get("sell_price"), 0)
+		):
+			return false
+		seen[item_id] = true
 	return true
 
 

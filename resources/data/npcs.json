@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": [
     {
       "id": "quest_giver_mira",
@@ -23,6 +23,14 @@
       "quest_ids": [
         "pelt_hunt"
       ]
+    },
+    {
+      "id": "vendor_grom",
+      "name_key": "npc_vendor_grom",
+      "dialogue_key": "npc_dialogue_grom",
+      "spawn_position": [-5.0, 0.0, 4.0],
+      "interaction_range": 3.0,
+      "quest_ids": []
     }
   ]
 }
