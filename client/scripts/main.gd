@@ -45,6 +45,7 @@ var _inventory_state: Array[Dictionary] = []
 var _equipment_state: Dictionary = {}
 var _gold: int = 0
 var _world_builder: RefCounted = null
+var _target_mob_id: String = ""
 var _inventory_key_down: bool = false
 var _chat_key_down: bool = false
 var _slash_key_down: bool = false
@@ -127,6 +128,8 @@ func _build_landscape() -> void:
 	_world_builder = WorldBuilderType.new(_simulation_config)
 	add_child(_world_builder.build_terrain())
 	add_child(_world_builder.build_props(_collect_occupied_positions()))
+	_world_builder.build_water(self)
+	_world_builder.build_foliage_layer(self)
 	_world_builder.setup_atmosphere(self)
 
 
@@ -145,6 +148,9 @@ func _build_interface() -> void:
 
 	_entity_views = EntityViewManagerType.new()
 	_entity_views.setup(self, _simulation_config, _game_data_registry)
+	# The instances of the mobs are built from the same registry as on the
+	# server, so the manager finds the type of every mob of the zone.
+	_entity_views.set("mob_types_by_instance", _mob_types_by_instance)
 	_player_views = _entity_views.get("player_views")
 	_mob_views = _entity_views.get("mob_views")
 	_npc_views = _entity_views.get("npc_views")
@@ -634,7 +640,9 @@ func _update_target() -> void:
 	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view == null:
 		hud.hide_target()
+		_target_mob_id = ""
 		_entity_views.call("set_target", "", null, 0.0, 0.0)
+		_update_entity_nameplates()
 		return
 	var target_mob_id: String = ""
 	var nearest_distance_squared: float = INF
@@ -648,9 +656,11 @@ func _update_target() -> void:
 		if distance_squared < nearest_distance_squared:
 			nearest_distance_squared = distance_squared
 			target_mob_id = mob_id
+	_target_mob_id = target_mob_id
 	if target_mob_id.is_empty():
 		hud.hide_target()
 		_entity_views.call("set_target", "", null, 0.0, 0.0)
+		_update_entity_nameplates()
 		return
 	var mob_definition: Dictionary = _mob_definition(target_mob_id)
 	var mob_state: Dictionary = _mob_states[target_mob_id]
@@ -663,6 +673,7 @@ func _update_target() -> void:
 	)
 	var mob_view: Node3D = _mob_views.get(target_mob_id)
 	if mob_view == null:
+		_update_entity_nameplates()
 		return
 	_entity_views.call(
 		"set_target",
@@ -670,6 +681,21 @@ func _update_target() -> void:
 		mob_view,
 		float(mob_definition.get("visual_radius", 0.5)) * 1.4,
 		_ground_height(mob_view.global_position.x, mob_view.global_position.z),
+	)
+	_update_entity_nameplates()
+
+
+## Updates the nameplates of the mobs and of the NPCs.
+##
+## The bar of a mob shows only when it lost health or when it is the target.
+func _update_entity_nameplates() -> void:
+	if _entity_views == null:
+		return
+	_entity_views.call(
+		"update_entity_nameplates",
+		_mob_states,
+		_quest_states,
+		_target_mob_id,
 	)
 
 
@@ -889,6 +915,10 @@ func _on_chat_message_received(
 		"system_key": system_key,
 		"reason": reason,
 	})
+	# The name of a player reaches the client with the messages of the chat,
+	# so the nameplate of the player can carry it.
+	if sender_peer_id > 0 and not sender_name.is_empty():
+		_entity_views.call("set_player_name", sender_peer_id, sender_name)
 
 
 ## Requests an invitation into a party.
@@ -932,9 +962,11 @@ func _on_party_result_received(
 		return
 	if accepted:
 		chat_panel.set_party_state(party_id, leader_peer_id, members)
+		_entity_views.call("set_party_members", members)
 		return
 	if reason == "not_in_party":
 		chat_panel.clear_party_state()
+		_entity_views.call("set_party_members", [])
 		return
 	chat_panel.add_message({
 		"channel": "system",

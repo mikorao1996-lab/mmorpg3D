@@ -70,6 +70,17 @@ decoration only — they never touch the server state. The playable area is
 `world_half_extent` units around the spawn point, and the server sends the
 mobs, the NPCs, and the drops of the `interest_radius` around a player.
 
+The ground is alive. The grass is one MultiMesh of 24 000 tufts
+(`foliage_count`), so the whole field costs a single draw call, and a shader
+(`client/shaders/foliage_wind.gdshader`) bends the tips in waves of wind and
+lets the sun through the blades. The tufts keep away from the plaza of the hub
+and never grow in the lake, and the trees and the rocks do not grow in the
+water either. The lake north-west of the hub uses a stylized shader
+(`client/shaders/stylized_water.gdshader`): the depth of the ground under
+every vertex of the surface is baked into the mesh, so the water runs from
+light turquoise at the shore to deep blue in the middle, with a white foam
+along the line of the shore.
+
 The hub itself is laid out by hand in the registries. The quest givers and the
 vendor stand next to the spawn point, the training slimes hold the glade to
 the west, the wolves patrol the woods to the east, and the mini-boss waits on
@@ -82,9 +93,14 @@ inside the world and within a walk of the spawn point, and every equipment
 slot has an item the player can actually obtain.
 
 Every player carries a nameplate above the head with the level of the
-character, a bar for the health, and a bar for the resource. The panels of the
-interface can be hidden: **I** toggles the inventory panel, **C** toggles the
-chat panel.
+character, a bar for the health, and a bar for the resource. The mobs and the
+NPCs carry nameplates of their own: the name in the color of the kind of the
+entity, the level in brackets, a marker of the quests above the NPC (`!` when
+the quest is ready to be handed in, `?` when it is available), and a compact
+bar of the health that shows up only when the entity was hit or when it is
+the target. The damage and the healing float up over the entity as numbers.
+The panels of the interface can be hidden: **I** toggles the inventory panel,
+**C** toggles the chat panel.
 
 The interface of the client is a heads-up display of the usual MMO kind, and it
 is built in code so it can be checked without the editor:
@@ -110,6 +126,8 @@ grass of the flat ground with the rock of the steep slopes, and the zone has a
 sky with a sun, volumetric fog, glow, and ambient occlusion.
 
 ![The interface of the client](./docs/images/client-interface.png)
+
+![The lake west of the hub](./docs/images/lake.png)
 
 Each zone holds the mobs of the registries. **SPACE** uses `starter_slash`and **E** uses `heavy_strike` on the nearest living mob. **Q** uses
 `guard_break`, **R** uses `whirlwind`, and **T** uses `second_wind`. The server

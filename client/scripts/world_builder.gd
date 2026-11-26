@@ -11,12 +11,19 @@ extends RefCounted
 ## The trees and the rocks are pure decoration: they are placed from a fixed
 ## seed, they avoid the hub and the positions of the NPCs and the mobs, and
 ## they are never part of the server state.
+##
+## The living layer of the world — the grass and the lake — lives in
+## `WorldLiveness`, so this file stays about the landscape itself.
 
 const TerrainShaderType: Shader = preload("res://client/shaders/terrain_pbr.gdshader")
 
 const DEFAULT_TERRAIN_RESOLUTION: int = 72
 const PROP_CLEAR_RADIUS: float = 11.0
 const PROP_CLEARANCE: float = 3.0
+const FOLIAGE_DEFAULT_COUNT: int = 24000
+const LAKE_CENTER: Vector3 = Vector3(-14.0, 0.0, 27.0)
+const LAKE_SIZE: float = 42.0
+const LAKE_LEVEL_MARGIN: float = 0.15
 
 const COLOR_GRASS: Color = Color(0.17, 0.33, 0.15)
 const COLOR_GRASS_DARK: Color = Color(0.13, 0.25, 0.13)
@@ -36,6 +43,7 @@ var _prop_seed: int = 4711
 var _prop_positions: Array[Vector3] = []
 var _tree_count: int = 190
 var _rock_count: int = 45
+var _foliage_count: int = FOLIAGE_DEFAULT_COUNT
 
 
 func _init(config: Dictionary = {}) -> void:
@@ -47,6 +55,7 @@ func _init(config: Dictionary = {}) -> void:
 	_prop_radius = float(config.get("prop_radius", 46.0))
 	_tree_count = int(config.get("tree_count", 190))
 	_rock_count = int(config.get("rock_count", 45))
+	_foliage_count = int(config.get("foliage_count", FOLIAGE_DEFAULT_COUNT))
 	_noise.seed = int(config.get("terrain_seed", 20261125))
 	_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	_noise.frequency = 0.028
@@ -89,6 +98,63 @@ func build_terrain() -> MeshInstance3D:
 	mesh_instance.name = "Terrain"
 	mesh_instance.mesh = surface.commit()
 	return mesh_instance
+
+
+## Builds the layer of grass of the map.
+##
+## The grass is one MultiMesh, so thousands of tufts cost one draw call. The
+## tufts stand on the ground of the terrain, they keep away from the plaza of
+## the hub, and they do not grow in the lake.
+func build_foliage_layer(parent: Node3D, count: int = 0) -> MultiMeshInstance3D:
+	return WorldLiveness.new().build_foliage_layer(self, parent, count)
+
+
+## Returns the positions of the tufts of grass.
+func get_foliage_positions() -> Array:
+	return WorldLiveness.new().get_foliage_positions(self)
+
+
+## Builds the surface of the lake.
+##
+## The lake is a flat surface at the water level, and the shore of the lake is
+## the line where the ground of the terrain rises through it.
+func build_water(parent: Node3D) -> MeshInstance3D:
+	return WorldLiveness.new().build_water(self, parent)
+
+
+## Returns the number of the tufts of grass of the map.
+func get_foliage_count() -> int:
+	return _foliage_count
+
+
+## Returns the radius of the flat ground of the hub.
+func get_hub_radius() -> float:
+	return _hub_radius
+
+
+## Reports whether a position stands inside the map.
+func is_inside_map(x: float, z: float) -> bool:
+	return absf(x) <= _extent and absf(z) <= _extent
+
+
+## Returns the color of the ground for a height.
+func get_terrain_color(height: float) -> Color:
+	return _terrain_color(height)
+
+
+## Returns the center of the lake.
+func get_lake_center() -> Vector3:
+	return LAKE_CENTER
+
+
+## Returns the size of the lake.
+func get_lake_size() -> float:
+	return LAKE_SIZE
+
+
+## Returns the level of the water of the lake.
+func get_water_level() -> float:
+	return get_height(LAKE_CENTER.x, LAKE_CENTER.z) + LAKE_LEVEL_MARGIN
 
 
 ## Builds the trees and the rocks of the map.
@@ -202,7 +268,11 @@ func _find_prop_position(
 		var z: float = random.randf_range(-_prop_radius, _prop_radius)
 		if sqrt(x * x + z * z) < PROP_CLEAR_RADIUS:
 			continue
-		var position: Vector3 = Vector3(x, get_height(x, z), z)
+		var height: float = get_height(x, z)
+		if height < get_water_level():
+			# Nothing grows in the lake.
+			continue
+		var position: Vector3 = Vector3(x, height, z)
 		if _is_too_close(position, occupied_positions):
 			continue
 		return position
@@ -241,8 +311,10 @@ func _append_terrain_quad(
 		Vector2(x1, z1),
 		Vector2(x1, z0),
 	]
-	_append_terrain_triangle(surface, corners[0], corners[1], corners[2])
-	_append_terrain_triangle(surface, corners[0], corners[2], corners[3])
+	# The corners wind clockwise from above, so the normals of the triangles
+	# point up and the ground is lit from the sky.
+	_append_terrain_triangle(surface, corners[0], corners[2], corners[1])
+	_append_terrain_triangle(surface, corners[0], corners[3], corners[2])
 
 
 ## Appends a triangle of the terrain.

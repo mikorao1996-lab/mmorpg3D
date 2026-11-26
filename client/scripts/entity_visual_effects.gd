@@ -13,6 +13,9 @@ const TARGET_COLOR_QUEST: Color = Color(0.95, 0.78, 0.3)
 const FLASH_COLOR: Color = Color(1.0, 0.42, 0.3)
 const FLASH_DURATION_SECONDS: float = 0.12
 const RING_HEIGHT: float = 0.06
+const TEXT_RISE_SECONDS: float = 0.85
+const TEXT_FADE_SECONDS: float = 0.45
+const TEXT_RISE_DISTANCE: float = 1.25
 
 
 ## Returns the color of the ring for a kind of target.
@@ -55,6 +58,69 @@ static func create_target_ring(radius: float, color: Color) -> MeshInstance3D:
 	ring.position.y = RING_HEIGHT
 	ring.visible = false
 	return ring
+
+
+## Shows the number of the damage or of the healing over an entity.
+##
+## The number floats up and fades away. The kind decides the look: `damage`,
+## `heal`, `crit`, and `miss` are the kinds of the text.
+static func spawn_floating_combat_text(
+	parent: Node3D,
+	world_position: Vector3,
+	amount: int,
+	kind: String = "damage",
+) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var label: Label3D = Label3D.new()
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.fixed_size = false
+	label.pixel_size = 0.0065
+	label.outline_size = 10
+	label.outline_modulate = Color(0.05, 0.05, 0.08, 0.95)
+	label.render_priority = 8
+
+	match kind:
+		"crit":
+			label.text = "%d!" % amount
+			label.modulate = Color(1.0, 0.82, 0.22)
+			label.scale = Vector3.ONE * 1.35
+		"heal":
+			label.text = "+%d" % amount
+			label.modulate = Color(0.28, 0.95, 0.45)
+		"miss":
+			label.text = TranslationServer.translate("combat_text_miss")
+			label.modulate = Color(0.75, 0.78, 0.82)
+		_:
+			label.text = "-%d" % amount
+			label.modulate = Color(1.0, 0.32, 0.28)
+
+	# The numbers of a series of hits spread out a little.
+	var random: RandomNumberGenerator = RandomNumberGenerator.new()
+	random.randomize()
+	label.position = world_position + Vector3(
+		random.randf_range(-0.35, 0.35),
+		2.1,
+		random.randf_range(-0.35, 0.35),
+	)
+	parent.add_child(label)
+
+	var tween: Tween = label.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(
+		label,
+		"position:y",
+		label.position.y + TEXT_RISE_DISTANCE,
+		TEXT_RISE_SECONDS,
+	).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(
+		label,
+		"modulate:a",
+		0.0,
+		TEXT_FADE_SECONDS,
+	).set_delay(TEXT_RISE_SECONDS * 0.45)
+	tween.chain().tween_callback(label.queue_free)
 
 
 ## Flashes the material of an entity that was hit.
