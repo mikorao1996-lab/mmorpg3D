@@ -16,6 +16,8 @@
   "local_reconciliation_factor": 0.35,
   "inventory_slot_count": 20,
   "starting_gold": 100,
+  "player_class_id": "warrior",
+  "character_autosave_interval_seconds": 30,
   "chat_message_max_length": 120,
   "chat_messages_per_second": 5,
   "chat_history_size": 30,

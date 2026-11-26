@@ -5,6 +5,10 @@ const MIGRATIONS: Array[Dictionary] = [
 		"version": 1,
 		"file": "res://server/db/migrations/0001_create_characters.sql",
 	},
+	{
+		"version": 2,
+		"file": "res://server/db/migrations/0002_character_progress.sql",
+	},
 ]
 
 

@@ -112,10 +112,22 @@ func _run() -> void:
 
 	var updated_character: Dictionary = original_character.duplicate(true)
 	updated_character["character_name"] = "Updated O'Reilly"
+	updated_character["character_token_hash"] = (
+		"fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+	)
 	updated_character["experience"] = 1250
+	updated_character["gold"] = 275
 	updated_character["position"] = Vector3(3.25, 0.0, -8.5)
 	updated_character["health"] = 73.5
 	updated_character["resource"] = 41.0
+	updated_character["inventory"] = [
+		{"item_id": "minor_potion", "quantity": 5},
+		{"item_id": "slime_gel", "quantity": 1},
+	]
+	updated_character["equipment"] = {"weapon": "iron_sword", "chest": "leather_vest"}
+	updated_character["quests"] = {
+		"slime_problem": {"status": "turned_in", "progress": 3},
+	}
 	if not _check_result(
 			repository_with_connection.save_character(updated_character),
 			"save character"):
@@ -159,13 +171,18 @@ func _test_character() -> Dictionary:
 	return {
 		"character_id": TEST_CHARACTER_ID,
 		"character_name": "O'Reilly",
+		"character_token_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		"class_id": "warrior",
 		"level": 1,
 		"experience": 0,
+		"gold": 100,
 		"zone_id": "starter",
 		"position": Vector3(1.25, 0.0, -4.5),
 		"health": 100.0,
 		"resource": 100.0,
+		"inventory": [{"item_id": "minor_potion", "quantity": 2}],
+		"equipment": {"weapon": "iron_sword"},
+		"quests": {"slime_problem": {"status": "active", "progress": 1}},
 	}
 
 
@@ -181,15 +198,54 @@ func _check_loaded_character(result: Dictionary, expected: Dictionary) -> bool:
 	return _check(
 		actual["character_id"] == expected["character_id"]
 				and actual["character_name"] == expected["character_name"]
+				and actual["character_token_hash"] == expected["character_token_hash"]
 				and actual["class_id"] == expected["class_id"]
 				and actual["level"] == expected["level"]
 				and actual["experience"] == expected["experience"]
+				and actual["gold"] == expected["gold"]
 				and actual["zone_id"] == expected["zone_id"]
 				and actual_position.is_equal_approx(expected_position)
 				and is_equal_approx(float(actual["health"]), float(expected["health"]))
-				and is_equal_approx(float(actual["resource"]), float(expected["resource"])),
+				and is_equal_approx(float(actual["resource"]), float(expected["resource"]))
+				and _same_json(actual["inventory"], expected["inventory"])
+				and _same_json(actual["equipment"], expected["equipment"])
+				and _same_json(actual["quests"], expected["quests"]),
 		"loaded character does not match expected state",
 	)
+
+
+## Compares two JSON documents by their content.
+##
+## PostgreSQL reorders the keys of a JSONB document, so the comparison cannot
+## rely on the order of the keys.
+func _same_json(actual: Variant, expected: Variant) -> bool:
+	var actual_is_number: bool = typeof(actual) == TYPE_INT or typeof(actual) == TYPE_FLOAT
+	var expected_is_number: bool = typeof(expected) == TYPE_INT or typeof(expected) == TYPE_FLOAT
+	if actual_is_number and expected_is_number:
+		return is_equal_approx(float(actual), float(expected))
+	if typeof(actual) != typeof(expected):
+		return false
+	if typeof(actual) == TYPE_DICTIONARY:
+		var actual_keys: Array = (actual as Dictionary).keys()
+		var expected_keys: Array = (expected as Dictionary).keys()
+		actual_keys.sort()
+		expected_keys.sort()
+		if actual_keys != expected_keys:
+			return false
+		for key: Variant in actual_keys:
+			if not _same_json((actual as Dictionary)[key], (expected as Dictionary)[key]):
+				return false
+		return true
+	if typeof(actual) == TYPE_ARRAY:
+		var actual_array: Array = actual
+		var expected_array: Array = expected
+		if actual_array.size() != expected_array.size():
+			return false
+		for index: int in range(actual_array.size()):
+			if not _same_json(actual_array[index], expected_array[index]):
+				return false
+		return true
+	return actual == expected
 
 
 func _check_result(result: Dictionary, label: String) -> bool:

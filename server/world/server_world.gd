@@ -308,6 +308,31 @@ func add_player(peer_id: int) -> void:
 	_peer_zones[peer_id] = _default_zone_id
 
 
+## Adds a player with the progress of a stored character.
+##
+## The character returns to the zone it was saved in, and falls back to the
+## default zone when that zone is not configured anymore.
+func add_player_with_restored_state(peer_id: int, restored_state: Dictionary) -> bool:
+	if _peer_zones.has(peer_id):
+		return false
+	var target_zone_id: String = str(restored_state.get("zone_id", ""))
+	if not _zones.has(target_zone_id):
+		target_zone_id = _default_zone_id
+	var zone: RefCounted = _zones[target_zone_id]
+	if not zone.call("add_player_with_restored_state", peer_id, restored_state):
+		return false
+	_peer_zones[peer_id] = target_zone_id
+	return true
+
+
+## Exports the live player state of a peer for the persistence.
+func export_player_state(peer_id: int) -> Dictionary:
+	if not _peer_zones.has(peer_id):
+		return {}
+	var zone: RefCounted = _zones[_peer_zones[peer_id]]
+	return zone.export_player_state(peer_id)
+
+
 func remove_player(peer_id: int) -> void:
 	if not _peer_zones.has(peer_id):
 		return

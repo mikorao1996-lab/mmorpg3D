@@ -3,6 +3,9 @@ extends Node
 
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
 const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd")
+const CharacterIdentityType: GDScript = preload("res://client/scripts/character_identity.gd")
+
+const MAX_IDENTITY_RECOVERIES: int = 1
 
 signal connected()
 signal disconnected()
@@ -80,11 +83,18 @@ signal party_result_received(
 var peer: ENetMultiplayerPeer
 var is_connected: bool = false
 var player_name: String = ""
+var identity_path: String = CharacterIdentityType.DEFAULT_PATH
+var character_identity: RefCounted = null
 var _transport_connected: bool = false
 var _hello_sent: bool = false
+var _server_address: String = ""
+var _server_port: int = ProtocolConstantsType.SERVER_PORT
+var _identity_recoveries: int = 0
 
 
 func connect_to_server(address: String, port: int = ProtocolConstantsType.SERVER_PORT) -> Error:
+	_server_address = address
+	_server_port = port
 	peer = ENetMultiplayerPeer.new()
 	var error: Error = peer.create_client(address, port, 2)
 	if error != OK:
@@ -97,6 +107,18 @@ func connect_to_server(address: String, port: int = ProtocolConstantsType.SERVER
 		return ERR_UNCONFIGURED
 	server_peer.set_timeout(3000, 5000, 10000)
 	return OK
+
+
+## Closes the connection to the server.
+##
+## The peer is released, so the client stops polling a closed connection.
+func disconnect_from_server() -> void:
+	if peer != null:
+		peer.close()
+		peer = null
+	is_connected = false
+	_transport_connected = false
+	_hello_sent = false
 
 
 func _process(_delta: float) -> void:
@@ -150,11 +172,16 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 			if protocol_value != ProtocolConstantsType.PROTOCOL_VERSION:
 				hello_rejected.emit("protocol_mismatch")
 				return
+			_store_issued_identity(payload)
 			is_connected = true
 			connected.emit()
 			hello_accepted.emit(protocol_value, player_id_value)
 		ProtocolConstantsType.OPCODE_HELLO_REJECTED:
-			hello_rejected.emit(str(payload.get("reason", "unknown")))
+			var rejection_reason: String = str(payload.get("reason", "unknown"))
+			if rejection_reason == "unknown_character":
+				_recover_from_unknown_character()
+				return
+			hello_rejected.emit(rejection_reason)
 		ProtocolConstantsType.OPCODE_ZONE_TRANSFER_RESULT:
 			var zone_id_value: Variant = payload.get("zone_id", null)
 			var accepted_value: Variant = payload.get("accepted", null)
@@ -386,13 +413,49 @@ func handle_packet(channel: int, packet: PackedByteArray) -> void:
 			)
 
 
+## Sends the handshake to the server.
+##
+## The handshake carries the identity of the character, so the server can find
+## the stored progress of this client.
 func send_hello() -> Error:
 	if player_name.strip_edges().is_empty():
 		player_name = "Traveler-%d" % (randi() % 900 + 100)
+	var identity: RefCounted = _ensure_identity()
 	return send_packet(ProtocolConstantsType.OPCODE_HELLO, {
 		"protocol": ProtocolConstantsType.PROTOCOL_VERSION,
 		"name": player_name,
+		"character_id": str(identity.get("character_id")),
+		"character_token": str(identity.get("character_token")),
 	})
+
+
+## Returns the identity of the character of this client.
+func _ensure_identity() -> RefCounted:
+	if character_identity == null:
+		character_identity = CharacterIdentityType.new(identity_path)
+	return character_identity
+
+
+## Forgets the stored character and connects again.
+##
+## The server reports a character it does not know when its database was
+## replaced, so the client starts a new character instead of staying broken.
+func _recover_from_unknown_character() -> void:
+	if _identity_recoveries >= MAX_IDENTITY_RECOVERIES:
+		return
+	_identity_recoveries += 1
+	var identity: RefCounted = _ensure_identity()
+	identity.call("clear")
+	push_warning("The stored character is unknown to the server, starting a new character")
+	if peer != null:
+		peer.close()
+	peer = null
+	is_connected = false
+	_transport_connected = false
+	_hello_sent = false
+	var error: Error = connect_to_server(_server_address, _server_port)
+	if error != OK:
+		push_error("Failed to reconnect to the server: %s" % error)
 
 
 func send_keepalive() -> Error:
@@ -544,6 +607,25 @@ func request_party_action(action: String, target_peer_id: int = 0) -> Error:
 		"action": action,
 		"target_peer_id": target_peer_id,
 	})
+
+
+## Keeps the identity the server issued for this client.
+##
+## The server sends the secret only when it issues it, so an existing
+## character keeps the secret the client already stored.
+func _store_issued_identity(payload: Dictionary) -> void:
+	var character_id_value: Variant = payload.get("character_id", "")
+	if not character_id_value is String or str(character_id_value).is_empty():
+		return
+	var character_token_value: Variant = payload.get("character_token", "")
+	var identity: RefCounted = _ensure_identity()
+	var stored: bool = identity.call(
+		"store",
+		str(character_id_value),
+		str(character_token_value),
+	)
+	if not stored:
+		push_warning("Could not store the identity of the character")
 
 
 func send_packet(opcode: int, payload: Dictionary = {}) -> Error:

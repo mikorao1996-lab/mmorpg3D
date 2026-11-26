@@ -6,6 +6,7 @@ const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_
 var peer: ENetPacketPeer
 var authenticated: bool = false
 var player_name: String = ""
+var character_id: String = ""
 var connected_at_ms: int = Time.get_ticks_msec()
 var rate_window_started_ms: int = connected_at_ms
 var requests_in_window: int = 0

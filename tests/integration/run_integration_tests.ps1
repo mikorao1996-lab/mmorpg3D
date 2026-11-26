@@ -17,7 +17,8 @@ $integrationScenes = @(
 	"res://tests/integration/trade_loopback.tscn",
 	"res://tests/integration/chat_loopback.tscn",
 	"res://tests/integration/landscape_loopback.tscn",
-	"res://tests/integration/hub_content_loopback.tscn"
+	"res://tests/integration/hub_content_loopback.tscn",
+	"res://tests/integration/persistence_loopback.tscn"
 )
 
 foreach ($integrationScene in $integrationScenes) {

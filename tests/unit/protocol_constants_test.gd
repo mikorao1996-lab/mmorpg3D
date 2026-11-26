@@ -4,7 +4,7 @@ const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_
 
 
 func run() -> bool:
-	if ProtocolConstantsType.PROTOCOL_VERSION != 9:
+	if ProtocolConstantsType.PROTOCOL_VERSION != 10:
 		push_error("Unexpected protocol version")
 		return false
 	if (

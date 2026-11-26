@@ -2,6 +2,7 @@ class_name ServerListener
 extends RefCounted
 
 signal player_authenticated(peer_id: int)
+signal player_authorized(peer_id: int, character_id: String, restored_state: Dictionary)
 signal player_disconnected(peer_id: int)
 signal movement_intent(peer_id: int, input_direction: Vector2)
 signal zone_transfer_requested(peer_id: int, zone_id: String)
@@ -28,6 +29,15 @@ const PacketCodecType: GDScript = preload("res://shared/protocol/packet_codec.gd
 var peer: ENetMultiplayerPeer
 var sessions: Dictionary = {}
 var started: bool = false
+var character_service: RefCounted = null
+
+
+## Sets the service that resolves the identity of a handshake.
+##
+## Without the service the server keeps the session-only behaviour: the
+## character lives in the memory of the session and is gone after a reconnect.
+func set_character_service(service: RefCounted) -> void:
+	character_service = service
 
 
 func start(port: int = ProtocolConstantsType.SERVER_PORT) -> bool:
@@ -119,6 +129,12 @@ func handle_packet(peer_id: int, channel: int, packet: PackedByteArray) -> void:
 		push_warning("Unknown opcode %d from peer %d" % [opcode, peer_id])
 
 
+## Handles the handshake of a client.
+##
+## With a character service the handshake carries the identity of the
+## character: the client sends the identifier and the secret it owns, and the
+## server answers with the stored progress. Without the service the character
+## is session-only and the handshake only carries the display name.
 func handle_hello(session: RefCounted, peer_id: int, payload: Dictionary) -> void:
 	var client_version: Variant = payload.get("protocol", -1)
 	if client_version is not int or client_version != ProtocolConstantsType.PROTOCOL_VERSION:
@@ -127,16 +143,81 @@ func handle_hello(session: RefCounted, peer_id: int, payload: Dictionary) -> voi
 		return
 
 	var first_handshake: bool = not session.authenticated
+	var name_value: Variant = payload.get("name", "")
+	var requested_name: String = ""
+	if name_value is String and not name_value.strip_edges().is_empty():
+		requested_name = name_value
+
+	if character_service == null:
+		session.authenticated = true
+		if first_handshake:
+			player_authenticated.emit(peer_id)
+			if not requested_name.is_empty():
+				session.player_name = requested_name
+				player_named.emit(peer_id, requested_name)
+		_send_hello_accepted(session, peer_id, "", "")
+		return
+
+	var character_id_value: Variant = payload.get("character_id", "")
+	var character_token_value: Variant = payload.get("character_token", "")
+	var authentication: Dictionary = character_service.call(
+		"authenticate",
+		str(character_id_value),
+		str(character_token_value),
+		requested_name,
+	)
+	if not bool(authentication.get("ok", false)):
+		var reason: String = str(authentication.get("reason", "identity_error"))
+		session.send(ProtocolConstantsType.OPCODE_HELLO_REJECTED, {"reason": reason})
+		push_warning("Rejected handshake of peer %d: %s" % [peer_id, reason])
+		return
+
+	var character_id: String = str(authentication.get("character_id", ""))
+	var claim_result: Dictionary = character_service.call(
+		"claim_session",
+		character_id,
+		peer_id,
+	)
+	if not bool(claim_result.get("ok", false)):
+		var reason: String = str(claim_result.get("reason", "character_in_use"))
+		session.send(ProtocolConstantsType.OPCODE_HELLO_REJECTED, {"reason": reason})
+		push_warning("Rejected handshake of peer %d: %s" % [peer_id, reason])
+		return
+
 	session.authenticated = true
-	if first_handshake:
-		player_authenticated.emit(peer_id)
-		var name_value: Variant = payload.get("name", "")
-		if name_value is String and not name_value.strip_edges().is_empty():
-			session.player_name = name_value
-			player_named.emit(peer_id, name_value)
+	session.character_id = character_id
+	var character_name: String = str(authentication.get("character_name", requested_name))
+	if not character_name.is_empty():
+		session.player_name = character_name
+	player_named.emit(peer_id, session.player_name)
+	player_authorized.emit(
+		peer_id,
+		character_id,
+		authentication.get("state", {}),
+	)
+	_send_hello_accepted(
+		session,
+		peer_id,
+		character_id,
+		str(authentication.get("character_token", "")),
+	)
+
+
+## Sends the accepted handshake to a client.
+##
+## The token is only sent when the server issued it, so a client that already
+## owns a character never receives its secret again.
+func _send_hello_accepted(
+	session: RefCounted,
+	peer_id: int,
+	character_id: String,
+	character_token: String,
+) -> void:
 	var send_error: Error = session.send(ProtocolConstantsType.OPCODE_HELLO_ACCEPTED, {
 		"protocol": ProtocolConstantsType.PROTOCOL_VERSION,
 		"player_id": peer_id,
+		"character_id": character_id,
+		"character_token": character_token,
 	})
 	if send_error != OK:
 		push_warning("Failed to send hello response to peer %d: %s" % [peer_id, send_error])
@@ -551,5 +632,10 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		return
 	var session: RefCounted = sessions[peer_id]
 	if session.authenticated:
+		# The world saves the progress of the character before the session is
+		# released, so a new client cannot write over a character that is
+		# still being saved.
 		player_disconnected.emit(peer_id)
+		if character_service != null and not str(session.character_id).is_empty():
+			character_service.call("release_session", str(session.character_id))
 	sessions.erase(peer_id)

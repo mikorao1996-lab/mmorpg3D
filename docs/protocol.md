@@ -2,7 +2,7 @@
 
 ## Bootstrap protocol constants
 
-- Protocol version: `9`
+- Protocol version: `10`
 - Snapshot channel: `0`, unreliable.
 - Event channel: `1`, reliable.
 - Maximum packet size: `4096` bytes.
@@ -67,8 +67,9 @@ that recipient. The current default radius is `10` world units in
 Progression is server-authoritative. Killing a mob awards its configured
 `experience_reward`; level thresholds and derived stats are loaded from
 `resources/data/progression.json`. Stats update on the next snapshot. At the
-level cap, further experience does not raise the level. Level and experience
-are session-only until a secure account/character identity is implemented.
+level cap, further experience does not raise the level. The progress of a
+character is stored in PostgreSQL and survives a reconnect, as described in the
+section about the character identity.
 
 `ZONE_TRANSFER` requests contain a configured `zone_id`. Only authenticated
 peers can request a transfer. The server replies reliably with
@@ -178,12 +179,49 @@ vendor as `item_id`, `buy_price`, and `sell_price` entries, and is empty for an
 NPC that is not a vendor. The client renders those prices, but every trade is
 priced by the server again.
 
+## Character identity
+
+The handshake of protocol version 10 carries the identity of the character
+next to the `protocol` version and the optional `name`:
+
+- `HELLO` contains `protocol`, `name`, `character_id`, and `character_token`.
+- `HELLO_ACCEPTED` contains `protocol`, `player_id`, `character_id`, and
+  `character_token`.
+
+`character_id` is the identifier of the character in UUID form. `character_token`
+is the secret that belongs to that character. A client without an identity
+sends empty strings; the server then creates a character, generates the
+identifier and the secret, and returns both in `HELLO_ACCEPTED`. The client
+keeps the pair in its user directory (`user://character_identity.json`) and
+sends it with every following handshake. The server stores only the SHA-256
+digest of the secret, so the database never holds the value the client knows.
+
+A known identifier is only accepted together with the secret that belongs to
+it. The server answers `HELLO_REJECTED` with a `reason` of `invalid_identity`
+for a malformed identifier, `unknown_character` for an identifier it does not
+know, `identity_mismatch` for a foreign secret, and `character_in_use` while
+another session holds the same character. The client reacts to
+`unknown_character` by forgetting its identity and starting a new character.
+
+The progress of a character lives in PostgreSQL. The server restores the level,
+the experience, the gold, the inventory, the equipment, the quests, the zone,
+and the position when the handshake succeeds, and it stores them again on a
+regular interval and when the client leaves. The client never sends progress,
+so a modified client cannot grant itself anything.
+
+The secret is a bearer token and the transport is still plain ENet, so the
+secret travels in clear text and can be read by anyone on the wire. A
+credential login with a protected transport is a separate step; until it
+exists, the identity protects a character against another client, and not
+against an attacker in the middle of the connection.
+
 ## Chat and parties
 
-The handshake of protocol version 9 carries an optional `name` next to the
+The handshake of protocol version 10 carries an optional `name` next to the
 `protocol` version. The name is only used for the chat and for the member list
 of a party; the game itself never depends on it. A client without a name is
-shown as `Player <peer id>`.
+shown as `Player <peer id>`. A character that already exists keeps the name it
+was created with.
 
 `CHAT_SAY_REQUEST` requests contain `channel` and `text`. The supported
 channels are `say` for the zone of the sender and `party` for the party of the

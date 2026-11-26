@@ -141,6 +141,17 @@ start in the first configured zone. `ClientNet.request_zone_transfer(zone_id)`
 is available for server-validated transfers, but there is not yet a portal or
 zone-selection UI.
 
+The character survives a reconnect. On the first connection the server issues
+the character an identifier and a secret, and the client keeps both in
+`user://character_identity.json`. Every following handshake carries that pair,
+so the server restores the level, the experience, the gold, the inventory, the
+equipment, the quests, the zone, and the position of the character. The
+progress is written back to PostgreSQL when the player leaves and on a regular
+interval. The client never sends progress, only the identity, so a modified
+client cannot grant itself anything; a client that does not own the secret of a
+character is rejected. The secret is a bearer token and the transport is still
+plain ENet, so a full login with a protected transport is a separate step.
+
 The server loads the versioned item, ability, mob, quest, NPC, vendor, and
 progression JSON registries before listening. Their initial schema and
 cross-reference rules are described in
@@ -209,12 +220,20 @@ quest giver, accepts a quest, completes it, hands it in, defeats a slime of
 the glade, picks up its loot, and buys a potion from the vendor, while the
 second client writes into the zone chat and joins the party.
 
+The eighth integration scene plays the life of a persisted character: the
+client receives its identity, defeats a slime, picks up the loot, and leaves.
+The server stores the progress. The client then comes back with the same
+identity and finds its level, experience, gold, and inventory where it left
+them, while a client with a foreign secret is rejected.
+
 ## PostgreSQL driver spike
 
 The native extension in `native/postgres` is a synchronous `libpq` adapter.
 The server initializes the database and applies migrations before opening its
-listener. The character repository is not yet wired to live sessions because
-stable character identity and selection are not implemented.
+listener. The character repository is wired to the live sessions: the level,
+the experience, the gold, the inventory, the equipment, the quests, the zone,
+and the position of a character are stored in PostgreSQL and restored on the
+next connection.
 
 Initialize the `godot-cpp` submodule:
 
@@ -252,6 +271,18 @@ On Linux, with the temporary cluster listening on the same address and port:
 
 ```sh
 godot --headless --path /path/to/mmorpg3D --script res://tests/integration/postgres_character_repository_test.gd
+```
+
+`tests/integration/sql/repository_statements.sql` holds the same statements as
+the character repository, so the SQL can be checked against a live PostgreSQL
+with `psql -f` even when the GDExtension cannot be loaded:
+
+```sh
+psql -h 127.0.0.1 -p 55432 -U postgres -d mmorpg3d \
+  -v ON_ERROR_STOP=1 \
+  -f server/db/migrations/0001_create_characters.sql \
+  -f server/db/migrations/0002_character_progress.sql \
+  -f tests/integration/sql/repository_statements.sql
 ```
 
 To check that the extension loads and reports an unavailable database without

@@ -12,6 +12,7 @@ const QuestSystemType: GDScript = preload("res://server/systems/quest_system.gd"
 const NpcSystemType: GDScript = preload("res://server/systems/npc_system.gd")
 const TradeSystemType: GDScript = preload("res://server/systems/trade_system.gd")
 const ZoneSnapshotBuilderType: GDScript = preload("res://server/systems/zone_snapshot_builder.gd")
+const CharacterStateSystemType: GDScript = preload("res://server/systems/character_state_system.gd")
 
 var zone_id: String
 var _movement_speed: float
@@ -117,6 +118,35 @@ func add_player_with_state(peer_id: int, player_state: Dictionary) -> void:
 	copied_state["spawn_position"] = copied_state["position"]
 	copied_state["input"] = Vector2.ZERO
 	_players[peer_id] = copied_state
+
+
+## Restores a stored character into this zone.
+##
+## The stored character is converted into the live player state, so the zone
+## keeps a single shape of a player no matter where the progress came from.
+func add_player_with_restored_state(peer_id: int, restored_state: Dictionary) -> bool:
+	if _players.has(peer_id):
+		return false
+	var player_state: Dictionary = CharacterStateSystemType.build_restored_state(
+		restored_state,
+		{
+			"progression": _progression_definitions,
+			"items": _item_definitions,
+			"quests": _quest_definitions,
+			"inventory_slot_count": _inventory_slot_count,
+		},
+	)
+	if player_state.is_empty():
+		return false
+	_players[peer_id] = player_state
+	return true
+
+
+## Exports the live player state for the persistence.
+func export_player_state(peer_id: int) -> Dictionary:
+	if not _players.has(peer_id):
+		return {}
+	return CharacterStateSystemType.export_state(_players[peer_id], zone_id)
 
 
 func remove_player(peer_id: int) -> void:

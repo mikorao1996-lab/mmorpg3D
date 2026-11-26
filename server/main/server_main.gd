@@ -4,11 +4,16 @@ const PROJECT_LOGGER: GDScript = preload("res://shared/logging/project_logger.gd
 const SimulationConfigType: GDScript = preload("res://shared/data/simulation_config.gd")
 const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 const DatabaseBootstrapType: GDScript = preload("res://server/db/database_bootstrap.gd")
+const CharacterSessionServiceType: GDScript = preload("res://server/systems/character_session_service.gd")
 
 var server_listener: RefCounted
 var server_world: RefCounted
 var database_connection: RefCounted
+var character_service: RefCounted
 var game_data_registry: Dictionary = {}
+var _character_ids: Dictionary = {}
+var _autosave_accumulator: float = 0.0
+var _autosave_interval_seconds: float = 30.0
 
 
 func _ready() -> void:
@@ -45,8 +50,18 @@ func _ready() -> void:
 		simulation_config,
 		game_data_registry,
 	)
-	server_listener.player_authenticated.connect(server_world.add_player)
-	server_listener.player_authenticated.connect(_on_player_authenticated)
+	character_service = CharacterSessionServiceType.from_connection(
+		database_connection,
+		str((simulation_config["zone_ids"] as Array)[0]),
+		str(simulation_config.get("player_class_id", "warrior")),
+		Vector3.ZERO,
+		int(simulation_config.get("starting_gold", 0)),
+	)
+	_autosave_interval_seconds = float(
+		simulation_config.get("character_autosave_interval_seconds", 30.0)
+	)
+	server_listener.set_character_service(character_service)
+	server_listener.player_authorized.connect(_on_player_authorized)
 	server_listener.player_named.connect(_on_player_named)
 	server_listener.player_disconnected.connect(_on_player_disconnected)
 	server_listener.movement_intent.connect(_on_movement_intent)
@@ -65,6 +80,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_save_all_characters()
 	if database_connection != null:
 		database_connection.call("close_connection")
 		database_connection = null
@@ -75,6 +91,10 @@ func _process(delta: float) -> void:
 		server_listener.poll()
 	if server_world != null and server_world.advance(delta):
 		server_listener.broadcast_world_snapshots(server_world.create_snapshots())
+	_autosave_accumulator += delta
+	if _autosave_accumulator >= _autosave_interval_seconds:
+		_autosave_accumulator = 0.0
+		_save_all_characters()
 
 
 func _on_movement_intent(peer_id: int, input_direction: Vector2) -> void:
@@ -146,14 +166,56 @@ func _on_player_named(peer_id: int, player_name: String) -> void:
 	server_world.set_player_name(peer_id, player_name)
 
 
-func _on_player_authenticated(peer_id: int) -> void:
+## Adds a player whose identity the server has resolved.
+##
+## The stored progress of the character is restored, so the player continues
+## where the last session ended.
+func _on_player_authorized(
+	peer_id: int,
+	character_id: String,
+	restored_state: Dictionary,
+) -> void:
+	if not server_world.add_player_with_restored_state(peer_id, restored_state):
+		push_error(
+			"Could not restore the character %s for peer %d" % [character_id, peer_id]
+		)
+		server_world.add_player(peer_id)
+	_character_ids[peer_id] = character_id
 	_send_system_message("chat_system_player_joined", peer_id)
 
 
 func _on_player_disconnected(peer_id: int) -> void:
 	# The peer that left the zone is no longer a valid recipient.
+	_save_character(peer_id)
+	_character_ids.erase(peer_id)
 	_send_system_message("chat_system_player_left", peer_id, peer_id)
 	server_world.remove_player(peer_id)
+
+
+## Saves the progress of every character of an open session.
+func _save_all_characters() -> void:
+	for peer_id: Variant in _character_ids:
+		_save_character(int(peer_id))
+
+
+## Saves the progress of a single character.
+func _save_character(peer_id: int) -> void:
+	if not _character_ids.has(peer_id) or character_service == null:
+		return
+	var character_id: String = str(_character_ids[peer_id])
+	var state: Dictionary = server_world.export_player_state(peer_id)
+	if state.is_empty():
+		return
+	var save_result: Dictionary = character_service.call(
+		"save_state",
+		character_id,
+		state,
+	)
+	if not bool(save_result.get("ok", false)):
+		push_error(
+			"Could not save the character %s: %s"
+			% [character_id, str(save_result.get("error", "Unknown database error."))]
+		)
 
 
 ## Sends a system message to every player of the zone of the peer.
