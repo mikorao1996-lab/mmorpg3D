@@ -13,6 +13,10 @@ signal party_leave_requested()
 
 const CHANNEL_SAY: String = "say"
 const CHANNEL_PARTY: String = "party"
+const FILTER_ALL: String = "all"
+const FILTER_SYSTEM: String = "system"
+const BACKGROUND_ALPHA_IDLE: float = 0.62
+const BACKGROUND_ALPHA_ACTIVE: float = 0.92
 
 const COLOR_SAY: String = "#d7e3f4"
 const COLOR_PARTY: String = "#8fd6a0"
@@ -30,11 +34,14 @@ var _history_label: RichTextLabel = null
 var _channel_label: Label = null
 var _say_button: Button = null
 var _party_button: Button = null
+var _all_button: Button = null
+var _system_button: Button = null
 var _input: LineEdit = null
 var _send_button: Button = null
 var _party_label: Label = null
 var _party_rows: VBoxContainer = null
 var _invite_row: HBoxContainer = null
+var _history_filter: String = FILTER_ALL
 
 
 func _ready() -> void:
@@ -133,6 +140,20 @@ func _ensure_layout() -> void:
 	channel_row.add_child(_party_button)
 	root.add_child(channel_row)
 
+	var filter_row: HBoxContainer = HBoxContainer.new()
+	filter_row.name = "FilterRow"
+	_all_button = Button.new()
+	_all_button.name = "AllButton"
+	_all_button.text = tr("chat_filter_all")
+	_all_button.pressed.connect(_on_filter_pressed.bind(FILTER_ALL))
+	filter_row.add_child(_all_button)
+	_system_button = Button.new()
+	_system_button.name = "SystemButton"
+	_system_button.text = tr("chat_filter_system")
+	_system_button.pressed.connect(_on_filter_pressed.bind(FILTER_SYSTEM))
+	filter_row.add_child(_system_button)
+	root.add_child(filter_row)
+
 	var input_row: HBoxContainer = HBoxContainer.new()
 	input_row.name = "InputRow"
 	_input = LineEdit.new()
@@ -164,6 +185,47 @@ func _ensure_layout() -> void:
 
 	_render_history()
 	_render_party()
+	_apply_background(BACKGROUND_ALPHA_IDLE)
+	mouse_entered.connect(_on_panel_hover_entered)
+	mouse_exited.connect(_on_panel_hover_exited)
+	_input.focus_entered.connect(_on_panel_hover_entered)
+	_input.focus_exited.connect(_on_panel_hover_exited)
+
+
+## Darkens the background of the panel.
+##
+## The panel is almost transparent while the player reads the world, and it
+## becomes solid while the pointer or the input line is on it.
+func _apply_background(alpha: float) -> void:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.06, 0.09, alpha)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.55, 0.45, 0.28, 0.55)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	add_theme_stylebox_override("panel", style)
+
+
+func _on_panel_hover_entered() -> void:
+	_apply_background(BACKGROUND_ALPHA_ACTIVE)
+
+
+func _on_panel_hover_exited() -> void:
+	_apply_background(BACKGROUND_ALPHA_IDLE)
+
+
+## Shows only the messages of the chosen filter.
+func _on_filter_pressed(filter: String) -> void:
+	_history_filter = filter
+	_all_button.disabled = filter == FILTER_ALL
+	_system_button.disabled = filter == FILTER_SYSTEM
+	_render_history()
 
 
 ## Renders the chat history.
@@ -172,6 +234,10 @@ func _render_history() -> void:
 		return
 	var lines: PackedStringArray = []
 	for message: Dictionary in _messages:
+		if _history_filter == FILTER_SYSTEM:
+			var channel: String = str(message.get("channel", "system"))
+			if channel != "system" and str(message.get("reason", "")).is_empty():
+				continue
 		lines.append(_format_message(message))
 	_history_label.text = "\n".join(lines)
 

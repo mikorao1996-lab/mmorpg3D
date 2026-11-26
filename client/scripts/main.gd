@@ -3,10 +3,12 @@ extends Node3D
 const SimulationConfigType: GDScript = preload("res://shared/data/simulation_config.gd")
 const MovementSimulationType: GDScript = preload("res://shared/sim/movement_simulation.gd")
 const ProtocolConstantsType: GDScript = preload("res://shared/protocol/protocol_constants.gd")
-const PlayerBodyAdapterType: GDScript = preload("res://client/scripts/player_body_adapter.gd")
 const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 const WorldSnapshotParserType: GDScript = preload("res://client/scripts/world_snapshot_parser.gd")
 const WorldBuilderType: GDScript = preload("res://client/scripts/world_builder.gd")
+const UiThemeFactoryType: GDScript = preload("res://client/scripts/ui_theme_factory.gd")
+const EntityViewManagerType: GDScript = preload("res://client/scripts/entity_view_manager.gd")
+const HudControllerType: GDScript = preload("res://client/scripts/hud_controller.gd")
 
 @onready var status_label: Label = $StatusCanvas/StatusPanel/StatusLabel
 @onready var hint_label: Label = $StatusCanvas/HintLabel
@@ -16,6 +18,7 @@ const WorldBuilderType: GDScript = preload("res://client/scripts/world_builder.g
 @onready var npc_dialog_panel: PanelContainer = $QuestCanvas/NpcDialogPanel
 @onready var quest_tracker_panel: PanelContainer = $QuestCanvas/QuestTrackerPanel
 @onready var chat_panel: PanelContainer = $ChatCanvas/ChatPanel
+@onready var hud: HudController = $HudCanvas/Hud
 
 var _simulation_config: Dictionary = {}
 var _game_data_registry: Dictionary = {}
@@ -27,15 +30,16 @@ var _predicted_position: Vector3 = Vector3.ZERO
 var _has_authoritative_position: bool = false
 var _input_send_accumulator: float = 0.0
 var _snapshot_buffer: Array[Dictionary] = []
+var _entity_views: RefCounted = null
 var _player_views: Dictionary = {}
+var _mob_views: Dictionary = {}
+var _npc_views: Dictionary = {}
+var _drop_views: Dictionary = {}
+var _mob_types_by_instance: Dictionary = {}
 var _player_health_states: Dictionary = {}
 var _mob_states: Dictionary = {}
-var _mob_views: Dictionary = {}
-var _mob_types_by_instance: Dictionary = {}
 var _drop_states: Dictionary = {}
-var _drop_views: Dictionary = {}
 var _npc_states: Dictionary = {}
-var _npc_views: Dictionary = {}
 var _quest_states: Array = []
 var _inventory_state: Array[Dictionary] = []
 var _equipment_state: Dictionary = {}
@@ -68,6 +72,7 @@ func _ready() -> void:
 		_game_data_registry["mobs"]
 	)
 	_build_landscape()
+	_build_interface()
 
 	hint_label.text = tr("controls_hint")
 	hint_panels_label.text = tr("controls_hint_panels")
@@ -114,7 +119,7 @@ func _ready() -> void:
 ##
 ## The terrain and the props are generated from a fixed seed, so every client
 ## shows the same map. The flat ground of the scene is replaced by the
-## generated terrain.
+## generated terrain, and the atmosphere is built next to it.
 func _build_landscape() -> void:
 	var ground: Node3D = get_node_or_null("Ground")
 	if ground != null:
@@ -122,6 +127,33 @@ func _build_landscape() -> void:
 	_world_builder = WorldBuilderType.new(_simulation_config)
 	add_child(_world_builder.build_terrain())
 	add_child(_world_builder.build_props(_collect_occupied_positions()))
+	_world_builder.setup_atmosphere(self)
+
+
+## Builds the interface of the client.
+##
+## Every panel shares one theme, so the interface looks like a single piece.
+## The views of the entities are built by their own manager, and the heads-up
+## display has its own controller.
+func _build_interface() -> void:
+	var theme: Theme = UiThemeFactoryType.create_mmorpg_theme()
+	inventory_panel.theme = theme
+	npc_dialog_panel.theme = theme
+	quest_tracker_panel.theme = theme
+	chat_panel.theme = theme
+	hud.theme = theme
+
+	_entity_views = EntityViewManagerType.new()
+	_entity_views.setup(self, _simulation_config, _game_data_registry)
+	_player_views = _entity_views.get("player_views")
+	_mob_views = _entity_views.get("mob_views")
+	_npc_views = _entity_views.get("npc_views")
+	_drop_views = _entity_views.get("drop_views")
+
+	hud.setup(_simulation_config, _game_data_registry)
+	hud.ability_requested.connect(_on_hud_ability_requested)
+	hud.item_use_requested.connect(_on_hud_item_use_requested)
+	hud.quick_action_requested.connect(_on_hud_quick_action_requested)
 
 
 ## Collects the positions of the NPCs and the mobs, so that no prop is placed
@@ -148,8 +180,9 @@ func _collect_occupied_positions() -> Array:
 ## A mob type can have several instances in the zone, so the definition is
 ## looked up by the type of the instance.
 func _mob_definition(mob_id: String) -> Dictionary:
-	var mob_type: String = str(_mob_types_by_instance.get(mob_id, mob_id))
-	return _game_data_registry["mobs"].get(mob_type, {})
+	if _entity_views == null:
+		return {}
+	return _entity_views.call("mob_definition", mob_id)
 
 
 ## Returns the height of the terrain at the given position.
@@ -278,7 +311,9 @@ func _process(_delta: float) -> void:
 			_combat_message_time_remaining - _delta,
 		)
 		if _combat_message_time_remaining == 0.0:
-			_update_combat_status()
+			status_label.text = ""
+	if _entity_views != null:
+		_entity_views.call("update_target_position")
 	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
 	if local_view != null:
 		camera.global_position = local_view.global_position + Vector3(
@@ -322,14 +357,13 @@ func _on_ability_cast_completed(
 	var mob_definition: Dictionary = _mob_definition(mob_id)
 	var mob_name: String = tr(mob_definition.get("name_key", "combat_unknown_target"))
 	if accepted:
-		status_label.text = tr("combat_cast_success") % [
+		_set_status_message(tr("combat_cast_success") % [
 			mob_name,
 			int(health),
 			int(max_health),
-		]
+		])
 	else:
-		status_label.text = tr("combat_cast_failed") % tr("combat_reason_" + reason)
-	_combat_message_time_remaining = 2.0
+		_set_status_message(tr("combat_cast_failed") % tr("combat_reason_" + reason))
 
 
 func _on_loot_pickup_completed(accepted: bool, reason: String, item_id: String) -> void:
@@ -338,10 +372,9 @@ func _on_loot_pickup_completed(accepted: bool, reason: String, item_id: String) 
 		if item_definition.is_empty():
 			push_error("Loot pickup result referenced unknown item %s" % item_id)
 			return
-		status_label.text = tr("loot_pickup_success") % tr(item_definition["name_key"])
+		_set_status_message(tr("loot_pickup_success") % tr(item_definition["name_key"]))
 	else:
-		status_label.text = tr("loot_pickup_failed") % tr("loot_reason_" + reason)
-	_combat_message_time_remaining = 2.0
+		_set_status_message(tr("loot_pickup_failed") % tr("loot_reason_" + reason))
 
 
 func _on_equipment_action_completed(
@@ -356,13 +389,12 @@ func _on_equipment_action_completed(
 		if item_definition.is_empty():
 			push_error("Equipment result referenced unknown item %s" % item_id)
 			return
-		status_label.text = tr("equipment_action_success") % [
+		_set_status_message(tr("equipment_action_success") % [
 			tr(item_definition["name_key"]),
 			tr("equipment_slot_" + slot_id),
-		]
+		])
 	else:
-		status_label.text = tr("equipment_action_failed") % tr("equipment_reason_" + reason)
-	_combat_message_time_remaining = 2.0
+		_set_status_message(tr("equipment_action_failed") % tr("equipment_reason_" + reason))
 
 
 func _on_world_snapshot(snapshot: Dictionary) -> void:
@@ -411,9 +443,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var existing_npc_ids: Array = _npc_views.keys()
 	for npc_id: String in existing_npc_ids:
 		if not _npc_states.has(npc_id):
-			var npc_view: Node3D = _npc_views[npc_id]
-			npc_view.queue_free()
-			_npc_views.erase(npc_id)
+			_entity_views.call("remove_npc_view", npc_id)
 		else:
 			var npc_view: Node3D = _npc_views[npc_id]
 			npc_view.position = _terrain_position(_npc_states[npc_id]["position"])
@@ -424,9 +454,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var existing_mob_ids: Array = _mob_views.keys()
 	for mob_id: String in existing_mob_ids:
 		if not _mob_states.has(mob_id):
-			var mob_view: Node3D = _mob_views[mob_id]
-			mob_view.queue_free()
-			_mob_views.erase(mob_id)
+			_entity_views.call("remove_mob_view", mob_id)
 		else:
 			var mob_view: Node3D = _mob_views[mob_id]
 			mob_view.position = _terrain_position(_mob_states[mob_id]["position"])
@@ -434,9 +462,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var existing_drop_ids: Array = _drop_views.keys()
 	for drop_id: int in existing_drop_ids:
 		if not _drop_states.has(drop_id):
-			var drop_view: MeshInstance3D = _drop_views[drop_id]
-			drop_view.queue_free()
-			_drop_views.erase(drop_id)
+			_entity_views.call("remove_drop_view", drop_id)
 	for drop_id: int in _drop_states:
 		_ensure_loot_view(drop_id)
 		var drop_view: MeshInstance3D = _drop_views[drop_id]
@@ -444,10 +470,13 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 			_terrain_position(_drop_states[drop_id]["position"])
 			+ Vector3(0.0, float(_simulation_config["loot_visual_radius"]), 0.0)
 		)
-	_update_combat_status()
+	_entity_views.call("flash_damaged_entities", _mob_states, _player_health_states)
+	_update_unit_frame()
 	_update_inventory_panel()
 	_update_quest_tracker()
 	_update_nameplates()
+	_update_hud()
+	_update_target()
 	_snapshot_buffer.append(snapshot_record)
 	var capacity: int = int(_simulation_config["snapshot_buffer_capacity"])
 	while _snapshot_buffer.size() > capacity:
@@ -456,9 +485,7 @@ func _on_world_snapshot(snapshot: Dictionary) -> void:
 	var existing_player_ids: Array = _player_views.keys()
 	for player_id: int in existing_player_ids:
 		if not positions.has(player_id):
-			var player_view: PlayerBodyAdapter = _player_views[player_id]
-			player_view.queue_free()
-			_player_views.erase(player_id)
+			_entity_views.call("remove_player_view", player_id)
 
 
 func _render_snapshot_buffer() -> void:
@@ -510,95 +537,23 @@ func _render_snapshot_buffer() -> void:
 
 
 func _ensure_player_view(player_id: int) -> void:
-	if _player_views.has(player_id):
-		return
-
-	var player_view: PlayerBodyAdapter = PlayerBodyAdapterType.new()
-	player_view.name = "Player_%d" % player_id
-	player_view.collision_layer = 0
-	player_view.collision_mask = 0
-	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-	var capsule: CapsuleMesh = CapsuleMesh.new()
-	capsule.radius = float(_simulation_config["player_visual_radius"])
-	capsule.height = float(_simulation_config["player_visual_height"])
-	mesh_instance.mesh = capsule
-	mesh_instance.material_override = StandardMaterial3D.new()
-	mesh_instance.name = "Visual"
-	mesh_instance.position.y = capsule.height / 2.0
-	player_view.add_child(mesh_instance)
-	var collision_shape: CollisionShape3D = CollisionShape3D.new()
-	var capsule_shape: CapsuleShape3D = CapsuleShape3D.new()
-	capsule_shape.radius = float(_simulation_config["player_visual_radius"])
-	capsule_shape.height = float(_simulation_config["player_visual_height"])
-	collision_shape.shape = capsule_shape
-	collision_shape.position.y = capsule_shape.height / 2.0
-	player_view.add_child(collision_shape)
-	player_view.build_nameplate(capsule.height + 0.45)
-	add_child(player_view)
-	_player_views[player_id] = player_view
-	var color: Color = Color(0.25, 0.7, 0.95)
-	if player_id == _local_player_id:
-		color = Color(0.95, 0.72, 0.25)
-	_set_player_color(player_id, color)
+	if _entity_views != null:
+		_entity_views.call("ensure_player_view", player_id)
 
 
 func _ensure_mob_view(mob_id: String) -> void:
-	if _mob_views.has(mob_id):
-		return
-	var mob_definition: Dictionary = _mob_definition(mob_id)
-	var mob_view: Node3D = Node3D.new()
-	mob_view.name = "Mob_%s" % mob_id
-	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-	var capsule: CapsuleMesh = CapsuleMesh.new()
-	capsule.radius = float(mob_definition["visual_radius"])
-	capsule.height = float(mob_definition["visual_height"])
-	mesh_instance.mesh = capsule
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = (
-		Color(0.78, 0.24, 0.2)
-		if bool(mob_definition["is_boss"])
-		else Color(0.35, 0.78, 0.38)
-	)
-	mesh_instance.material_override = material
-	mesh_instance.position.y = capsule.height / 2.0
-	mob_view.add_child(mesh_instance)
-	add_child(mob_view)
-	_mob_views[mob_id] = mob_view
+	if _entity_views != null:
+		_entity_views.call("ensure_mob_view", mob_id)
 
 
 func _ensure_npc_view(npc_id: String) -> void:
-	if _npc_views.has(npc_id):
-		return
-	var npc_view: Node3D = Node3D.new()
-	npc_view.name = "Npc_%s" % npc_id
-	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-	var capsule: CapsuleMesh = CapsuleMesh.new()
-	capsule.radius = float(_simulation_config["player_visual_radius"])
-	capsule.height = float(_simulation_config["player_visual_height"])
-	mesh_instance.mesh = capsule
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.85, 0.72, 0.3)
-	mesh_instance.material_override = material
-	mesh_instance.position.y = capsule.height / 2.0
-	npc_view.add_child(mesh_instance)
-	add_child(npc_view)
-	_npc_views[npc_id] = npc_view
+	if _entity_views != null:
+		_entity_views.call("ensure_npc_view", npc_id)
 
 
 func _ensure_loot_view(drop_id: int) -> void:
-	if _drop_views.has(drop_id):
-		return
-	var loot_view: MeshInstance3D = MeshInstance3D.new()
-	loot_view.name = "Loot_%d" % drop_id
-	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = float(_simulation_config["loot_visual_radius"])
-	sphere.height = sphere.radius * 2.0
-	loot_view.mesh = sphere
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(1.0, 0.78, 0.2)
-	loot_view.material_override = material
-	add_child(loot_view)
-	_drop_views[drop_id] = loot_view
+	if _entity_views != null:
+		_entity_views.call("ensure_loot_view", drop_id)
 
 
 ## Updates the nameplates above the players.
@@ -606,18 +561,8 @@ func _ensure_loot_view(drop_id: int) -> void:
 ## The plate of a player shows the level, the health, and the resource that the
 ## server reported for it.
 func _update_nameplates() -> void:
-	for player_id: Variant in _player_health_states:
-		var player_view: PlayerBodyAdapter = _player_views.get(player_id)
-		if player_view == null:
-			continue
-		var state: Dictionary = _player_health_states[player_id]
-		player_view.update_nameplate(
-			int(state.get("level", 1)),
-			float(state.get("health", 0.0)),
-			float(state.get("max_health", 1.0)),
-			float(state.get("resource", 0.0)),
-			float(state.get("max_resource", 1.0)),
-		)
+	if _entity_views != null:
+		_entity_views.call("update_nameplates", _player_health_states)
 
 
 ## Toggles the inventory panel.
@@ -640,67 +585,126 @@ func _update_quest_tracker() -> void:
 	quest_tracker_panel.update_view(_quest_states)
 
 
-func _update_combat_status() -> void:
-	if (
-		_combat_message_time_remaining > 0.0
-		or not _player_health_states.has(_local_player_id)
-		or _mob_states.is_empty()
-	):
+## Updates the frame of the character with the state the server reported.
+##
+## The summary of the character lives in the frame of the unit, so the status
+## line only carries the messages of the last action.
+func _update_unit_frame() -> void:
+	if not _player_health_states.has(_local_player_id):
 		return
-	var mob_id: String = _mob_states.keys()[0]
-	var mob_definition: Dictionary = _mob_definition(mob_id)
 	var player_state: Dictionary = _player_health_states[_local_player_id]
-	var inventory_names: PackedStringArray = []
-	for slot: Dictionary in _inventory_state:
-		var item_definition: Dictionary = _game_data_registry["items"][slot["item_id"]]
-		inventory_names.append(
-			"%s x%d" % [tr(item_definition["name_key"]), int(slot["quantity"])],
-		)
-	var inventory_summary: String = tr("inventory_empty")
-	if not inventory_names.is_empty():
-		inventory_summary = ", ".join(inventory_names)
-	var combat_summary: String = tr("combat_status") % [
-		int(player_state["level"]),
-		int(player_state["experience"]),
-		int(player_state["health"]),
-		int(player_state["max_health"]),
-		int(player_state["resource"]),
-		int(player_state["max_resource"]),
-		tr(mob_definition["name_key"]),
-		int(_mob_states[mob_id]["health"]),
-		int(_mob_states[mob_id]["max_health"]),
-	]
-	var inventory_line: String = tr("inventory_status") % [
-		_inventory_state.size(),
-		int(_simulation_config["inventory_slot_count"]),
-		inventory_summary,
-	]
-	var equipment_names: PackedStringArray = []
-	for slot_id: String in GameDataRegistryType.EQUIPMENT_SLOTS:
-		var item_id: String = str(_equipment_state.get(slot_id, ""))
-		if item_id.is_empty():
-			continue
-		var item_definition: Dictionary = _game_data_registry["items"][item_id]
-		equipment_names.append(
-			"%s: %s" % [
-				tr("equipment_slot_" + slot_id),
-				tr(item_definition["name_key"]),
-			],
-		)
-	var equipment_summary: String = tr("equipment_empty")
-	if not equipment_names.is_empty():
-		equipment_summary = ", ".join(equipment_names)
-	var equipment_line: String = tr("equipment_status") % equipment_summary
-	var gold_line: String = tr("gold_status") % _gold
-	status_label.text = (
-		combat_summary
-		+ "\n"
-		+ inventory_line
-		+ "\n"
-		+ equipment_line
-		+ "\n"
-		+ gold_line
+	hud.update_unit_frame(
+		int(player_state.get("level", 1)),
+		float(player_state.get("health", 0.0)),
+		float(player_state.get("max_health", 1.0)),
+		float(player_state.get("resource", 0.0)),
+		float(player_state.get("max_resource", 1.0)),
+		_gold,
 	)
+
+
+## Updates the heads-up display of the client.
+##
+## The bars of the character, the progress of the level, and the quick items
+## of the action bar all follow the snapshot of the server.
+func _update_hud() -> void:
+	if not _player_health_states.has(_local_player_id):
+		return
+	var player_state: Dictionary = _player_health_states[_local_player_id]
+	hud.update_experience(
+		int(player_state.get("experience", 0)),
+		int(player_state.get("level", 1)),
+	)
+	var consumables: Array = []
+	for slot: Dictionary in _inventory_state:
+		var item_id: String = str(slot.get("item_id", ""))
+		var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
+		if str(item_definition.get("item_type", "")) != "consumable":
+			continue
+		consumables.append(item_id)
+	hud.update_quick_items(consumables)
+
+
+## Chooses the entity the player aims at.
+##
+## The nearest living mob wins; an NPC that the player talks to keeps the
+## target until the conversation ends. The ring of the target and the frame of
+## the target follow the same choice.
+func _update_target() -> void:
+	var local_view: PlayerBodyAdapter = _player_views.get(_local_player_id)
+	if local_view == null:
+		hud.hide_target()
+		_entity_views.call("set_target", "", null, 0.0, 0.0)
+		return
+	var target_mob_id: String = ""
+	var nearest_distance_squared: float = INF
+	for mob_id: String in _mob_states:
+		if float(_mob_states[mob_id]["health"]) <= 0.0:
+			continue
+		var mob_position: Vector3 = _mob_states[mob_id]["position"]
+		var distance_squared: float = local_view.global_position.distance_squared_to(
+			mob_position
+		)
+		if distance_squared < nearest_distance_squared:
+			nearest_distance_squared = distance_squared
+			target_mob_id = mob_id
+	if target_mob_id.is_empty():
+		hud.hide_target()
+		_entity_views.call("set_target", "", null, 0.0, 0.0)
+		return
+	var mob_definition: Dictionary = _mob_definition(target_mob_id)
+	var mob_state: Dictionary = _mob_states[target_mob_id]
+	hud.update_target(
+		"enemy",
+		tr(str(mob_definition.get("name_key", "combat_unknown_target"))),
+		int(mob_definition.get("level", 1)),
+		float(mob_state["health"]),
+		float(mob_state["max_health"]),
+	)
+	var mob_view: Node3D = _mob_views.get(target_mob_id)
+	if mob_view == null:
+		return
+	_entity_views.call(
+		"set_target",
+		"enemy",
+		mob_view,
+		float(mob_definition.get("visual_radius", 0.5)) * 1.4,
+		_ground_height(mob_view.global_position.x, mob_view.global_position.z),
+	)
+
+
+## Shows a message of the last action in the status line.
+func _set_status_message(message: String) -> void:
+	status_label.text = message
+	_combat_message_time_remaining = 2.0
+
+
+## Sends the request of an ability of the action bar.
+func _on_hud_ability_requested(ability_id: String) -> void:
+	_request_attack(ability_id)
+	hud.start_cooldown(ability_id)
+
+
+## Sends the request of a quick item of the action bar.
+func _on_hud_item_use_requested(item_id: String) -> void:
+	var error: Error = _client_net.request_use_item(item_id)
+	if error != OK:
+		push_warning("Could not request item use: %s" % error)
+
+
+## Runs a quick action of the interface.
+##
+## The inventory and the party exist already; the skills and the journal are
+## not part of the slice yet, so they say so instead of doing nothing.
+func _on_hud_quick_action_requested(action: String) -> void:
+	match action:
+		"inventory":
+			_toggle_inventory_panel()
+			return
+		"party":
+			chat_panel.visible = true
+			return
+	_set_status_message(tr("hud_quick_unavailable") % tr("hud_quick_%s" % action))
 
 
 func _on_equip_requested(item_id: String) -> void:
@@ -732,16 +736,15 @@ func _on_item_use_completed(
 ) -> void:
 	if accepted:
 		var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
-		status_label.text = tr("item_use_success") % [
+		_set_status_message(tr("item_use_success") % [
 			tr(item_definition.get("name_key", item_id)),
 			int(health),
 			int(max_health),
 			int(resource),
 			int(max_resource),
-		]
+		])
 	else:
-		status_label.text = tr("item_use_failed") % tr("item_use_reason_" + reason)
-	_combat_message_time_remaining = 2.0
+		_set_status_message(tr("item_use_failed") % tr("item_use_reason_" + reason))
 
 
 ## Finds the closest NPC the player can reach and starts a conversation.
@@ -764,8 +767,7 @@ func _request_nearest_npc() -> void:
 			nearest_distance_squared = distance_squared
 			nearest_npc_id = npc_id
 	if nearest_npc_id.is_empty():
-		status_label.text = tr("interact_no_npc")
-		_combat_message_time_remaining = 1.0
+		_set_status_message(tr("interact_no_npc"))
 		return
 	var error: Error = _client_net.request_npc_interact(nearest_npc_id, "talk")
 	if error != OK:
@@ -799,20 +801,18 @@ func _on_npc_interaction_completed(
 	vendor_items: Array,
 ) -> void:
 	if not accepted:
-		status_label.text = tr("interact_failed") % tr("interact_reason_" + reason)
-		_combat_message_time_remaining = 2.0
+		_set_status_message(tr("interact_failed") % tr("interact_reason_" + reason))
 		return
 	if action == "turn_in":
 		var reward_names: PackedStringArray = []
 		for item_id: String in reward_item_ids:
 			var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
 			reward_names.append(tr(str(item_definition.get("name_key", item_id))))
-		status_label.text = tr("quest_turn_in_success") % [
+		_set_status_message(tr("quest_turn_in_success") % [
 			reward_experience,
 			reward_gold,
 			", ".join(reward_names),
-		]
-		_combat_message_time_remaining = 2.0
+		])
 	var local_state: Dictionary = _player_health_states.get(_local_player_id, {})
 	npc_dialog_panel.show_npc(
 		npc_id,
@@ -852,16 +852,14 @@ func _on_trade_completed(
 	gold: int,
 ) -> void:
 	if not accepted:
-		status_label.text = tr("trade_failed") % tr("trade_reason_" + reason)
-		_combat_message_time_remaining = 2.0
+		_set_status_message(tr("trade_failed") % tr("trade_reason_" + reason))
 		return
 	var item_definition: Dictionary = _game_data_registry["items"].get(item_id, {})
 	var item_name: String = tr(str(item_definition.get("name_key", item_id)))
 	if action == "buy":
-		status_label.text = tr("trade_buy_success") % [item_name, quantity, price * quantity]
+		_set_status_message(tr("trade_buy_success") % [item_name, quantity, price * quantity])
 	else:
-		status_label.text = tr("trade_sell_success") % [item_name, quantity, price * quantity]
-	_combat_message_time_remaining = 2.0
+		_set_status_message(tr("trade_sell_success") % [item_name, quantity, price * quantity])
 
 
 ## Sends a chat message to the server.
@@ -965,8 +963,7 @@ func _request_nearest_loot() -> void:
 			nearest_drop_id = drop_id
 			nearest_distance_squared = distance_squared
 	if nearest_drop_id == 0:
-		status_label.text = tr("loot_no_nearby")
-		_combat_message_time_remaining = 1.0
+		_set_status_message(tr("loot_no_nearby"))
 		return
 	var error: Error = _client_net.request_loot_pickup(nearest_drop_id)
 	if error != OK:
@@ -995,12 +992,8 @@ func _request_attack(ability_id: String) -> void:
 
 
 func _set_player_color(player_id: int, color: Color) -> void:
-	var player_view: PlayerBodyAdapter = _player_views.get(player_id)
-	if player_view == null:
-		return
-	var mesh_instance: MeshInstance3D = player_view.get_node("Visual")
-	var material: StandardMaterial3D = mesh_instance.material_override
-	material.albedo_color = color
+	if _entity_views != null:
+		_entity_views.call("set_player_color", player_id, color)
 
 
 func _is_finite_number(value: Variant) -> bool:

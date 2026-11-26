@@ -24,6 +24,8 @@ const WorldBuilderTest: GDScript = preload("res://tests/unit/world_builder_test.
 const HubLayoutTest: GDScript = preload("res://tests/unit/hub_layout_test.gd")
 const CharacterSessionServiceTest: GDScript = preload("res://tests/unit/character_session_service_test.gd")
 const CharacterStateSystemTest: GDScript = preload("res://tests/unit/character_state_system_test.gd")
+const UiThemeFactoryTest: GDScript = preload("res://tests/unit/ui_theme_factory_test.gd")
+const HudControllerTest: GDScript = preload("res://tests/unit/hud_controller_test.gd")
 
 
 func _initialize() -> void:
@@ -97,6 +99,12 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if not CharacterStateSystemTest.new().run():
+		quit(1)
+		return
+	if not UiThemeFactoryTest.new().run():
+		quit(1)
+		return
+	if not HudControllerTest.new().run():
 		quit(1)
 		return
 	print("UNIT_TESTS_OK")

@@ -13,6 +13,13 @@ signal use_item_requested(item_id: String)
 const GameDataRegistryType: GDScript = preload("res://shared/data/game_data_registry.gd")
 const STAT_KEYS: PackedStringArray = ["attack", "defense", "health", "resource"]
 
+## The colors of the items follow the level that is needed to use them, so the
+## rarity of an item is readable without opening it.
+const RARITY_COLOR_COMMON: Color = Color(0.74, 0.74, 0.74)
+const RARITY_COLOR_FINE: Color = Color(0.45, 0.82, 0.45)
+const RARITY_COLOR_RARE: Color = Color(0.42, 0.62, 0.95)
+const RARITY_COLOR_EPIC: Color = Color(0.74, 0.46, 0.95)
+
 var _item_definitions: Dictionary = {}
 var _equipment_rows: VBoxContainer = null
 var _inventory_rows: VBoxContainer = null
@@ -60,17 +67,20 @@ func _ensure_layout() -> void:
 func _build_layout() -> void:
 	var root: VBoxContainer = VBoxContainer.new()
 	root.name = "PanelRoot"
-	root.add_theme_constant_override("separation", 4)
+	root.add_theme_constant_override("separation", 6)
 	add_child(root)
 
 	_header_label = Label.new()
 	_header_label.name = "HeaderLabel"
 	_header_label.text = tr("inventory_panel_title") % 1
+	_header_label.add_theme_color_override("font_color", Color(0.95, 0.8, 0.45))
+	_header_label.add_theme_font_size_override("font_size", 17)
 	root.add_child(_header_label)
 
 	var gear_title: Label = Label.new()
 	gear_title.name = "GearTitle"
 	gear_title.text = tr("inventory_gear_title")
+	gear_title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.45))
 	root.add_child(gear_title)
 
 	_equipment_rows = VBoxContainer.new()
@@ -81,6 +91,7 @@ func _build_layout() -> void:
 	var inventory_title: Label = Label.new()
 	inventory_title.name = "InventoryTitle"
 	inventory_title.text = tr("inventory_items_title")
+	inventory_title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.45))
 	root.add_child(inventory_title)
 
 	_inventory_rows = VBoxContainer.new()
@@ -92,6 +103,28 @@ func _build_layout() -> void:
 	_bonuses_label.name = "BonusesLabel"
 	_bonuses_label.text = tr("inventory_bonuses_empty")
 	root.add_child(_bonuses_label)
+
+
+## Returns the color of an item by the level that is needed to use it.
+func _rarity_color(level_requirement: int) -> Color:
+	if level_requirement >= 6:
+		return RARITY_COLOR_EPIC
+	if level_requirement >= 4:
+		return RARITY_COLOR_RARE
+	if level_requirement >= 2:
+		return RARITY_COLOR_FINE
+	return RARITY_COLOR_COMMON
+
+
+## Builds the style of an item, so the rarity is visible in the list.
+func _build_rarity_style(color: Color) -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.border_width_left = 3
+	style.border_color = color
+	style.content_margin_left = 6
+	style.content_margin_top = 1
+	style.content_margin_bottom = 1
+	return style
 
 
 func _render_equipment(equipment: Dictionary, level: int) -> void:
@@ -116,6 +149,10 @@ func _render_equipment(equipment: Dictionary, level: int) -> void:
 			var item_definition: Dictionary = _item_definitions.get(item_id, {})
 			item_button.text = tr(item_definition.get("name_key", item_id))
 			item_button.tooltip_text = _build_item_tooltip(item_id, level)
+			item_button.add_theme_color_override(
+				"font_color",
+				_rarity_color(int(item_definition.get("level_requirement", 1))),
+			)
 			item_button.pressed.connect(_on_unequip_pressed.bind(slot_id))
 		row.add_child(item_button)
 		_equipment_rows.add_child(row)
@@ -146,6 +183,11 @@ func _render_inventory(inventory: Array, level: int) -> void:
 		item_label.text = _build_item_label(item_id, quantity, level)
 		item_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		item_label.tooltip_text = _build_item_tooltip(item_id, level)
+		var rarity_color: Color = _rarity_color(
+			int(item_definition.get("level_requirement", 1))
+		)
+		item_label.add_theme_stylebox_override("normal", _build_rarity_style(rarity_color))
+		item_label.add_theme_color_override("font_color", rarity_color)
 		row.add_child(item_label)
 
 		var action_button: Button = Button.new()

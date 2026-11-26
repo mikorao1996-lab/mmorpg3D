@@ -86,6 +86,31 @@ character, a bar for the health, and a bar for the resource. The panels of the
 interface can be hidden: **I** toggles the inventory panel, **C** toggles the
 chat panel.
 
+The interface of the client is a heads-up display of the usual MMO kind, and it
+is built in code so it can be checked without the editor:
+
+- the frame of the character in the top left corner holds the level, the
+  health, the resource, and the gold;
+- the frame of the target next to it appears when the player aims at a mob,
+  and the ring under the entity marks the target in the world;
+- the action bar in the bottom center holds the five abilities on the keys
+  **1** to **5** and the quick consumables on the keys **6** to **8**, and the
+  thin bar under it shows the progress of the level;
+- the quick access in the bottom right corner opens the inventory (**I**) and
+  the party (**P**);
+- the chat in the bottom left corner is almost transparent until the pointer
+  or the input line is on it, and it can filter the history to the messages of
+  the system;
+- the tracker of the quests floats over the right edge without a frame.
+
+`client/scripts/ui_theme_factory.gd` builds the theme of all of it: a dark
+surface with a bronze frame, rounded corners, and a warm text. The terrain
+uses a procedural shader (`client/shaders/terrain_pbr.gdshader`) that mixes the
+grass of the flat ground with the rock of the steep slopes, and the zone has a
+sky with a sun, volumetric fog, glow, and ambient occlusion.
+
+![The interface of the client](./docs/images/client-interface.png)
+
 Each zone holds the mobs of the registries. **SPACE** uses `starter_slash`and **E** uses `heavy_strike` on the nearest living mob. **Q** uses
 `guard_break`, **R** uses `whirlwind`, and **T** uses `second_wind`. The server
 enforces target, range, damage/heal, resource cost, and separate cooldowns. Mob health is

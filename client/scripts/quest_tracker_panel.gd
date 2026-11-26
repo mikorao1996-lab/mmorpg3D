@@ -40,6 +40,9 @@ func update_view(quests: Array) -> void:
 func _ensure_layout() -> void:
 	if _quest_rows != null:
 		return
+	# The tracker floats over the world without a frame of its own, so it never
+	# hides the play area.
+	add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	var root: VBoxContainer = VBoxContainer.new()
 	root.name = "TrackerRoot"
 	root.add_theme_constant_override("separation", 2)
@@ -48,6 +51,10 @@ func _ensure_layout() -> void:
 	_title_label = Label.new()
 	_title_label.name = "TitleLabel"
 	_title_label.text = tr("quest_tracker_title")
+	_title_label.add_theme_color_override("font_color", Color(0.95, 0.8, 0.45))
+	_title_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	_title_label.add_theme_constant_override("shadow_offset_x", 1)
+	_title_label.add_theme_constant_override("shadow_offset_y", 1)
 	root.add_child(_title_label)
 
 	_quest_rows = VBoxContainer.new()
@@ -81,6 +88,9 @@ func _render_quests(quests: Array) -> void:
 			int(entry[3]),
 			tr("quest_status_" + status),
 		]
+		row.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+		row.add_theme_constant_override("shadow_offset_x", 1)
+		row.add_theme_constant_override("shadow_offset_y", 1)
 		_quest_rows.add_child(row)
 
 

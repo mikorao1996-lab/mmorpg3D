@@ -12,6 +12,8 @@ extends RefCounted
 ## seed, they avoid the hub and the positions of the NPCs and the mobs, and
 ## they are never part of the server state.
 
+const TerrainShaderType: Shader = preload("res://client/shaders/terrain_pbr.gdshader")
+
 const DEFAULT_TERRAIN_RESOLUTION: int = 72
 const PROP_CLEAR_RADIUS: float = 11.0
 const PROP_CLEARANCE: float = 3.0
@@ -79,11 +81,8 @@ func build_terrain() -> MeshInstance3D:
 			_append_terrain_quad(surface, x0, z0, x1, z1)
 	surface.generate_normals()
 
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 0.95
-	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var material: ShaderMaterial = ShaderMaterial.new()
+	material.shader = TerrainShaderType
 	surface.set_material(material)
 
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
@@ -121,14 +120,73 @@ func build_props(occupied_positions: Array = []) -> MeshInstance3D:
 	surface.generate_normals()
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.vertex_color_use_as_albedo = true
-	material.roughness = 0.9
-	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	material.roughness = 0.86
+	material.metallic = 0.0
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	surface.set_material(material)
 
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
 	mesh_instance.name = "Props"
 	mesh_instance.mesh = surface.commit()
 	return mesh_instance
+
+
+## Builds the atmosphere of the zone.
+##
+## The atmosphere is the sky, the sun, and the post effects: the volumetric fog
+## gives the world depth, the glow lights the bright parts of the scene, and
+## the ambient occlusion keeps the objects in contact with the ground. It is
+## built in code, so the look of the world lives in one place.
+func setup_atmosphere(root: Node3D) -> void:
+	if root == null:
+		return
+	var environment: Environment = Environment.new()
+	environment.background_mode = Environment.BG_SKY
+	environment.sky = _build_sky()
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	environment.ambient_light_sky_contribution = 0.75
+	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
+	environment.tonemap_exposure = 1.05
+	environment.volumetric_fog_enabled = true
+	environment.volumetric_fog_density = 0.012
+	environment.volumetric_fog_albedo = Color(0.75, 0.84, 0.92)
+	environment.volumetric_fog_emission_energy = 0.2
+	environment.glow_enabled = true
+	environment.glow_intensity = 0.6
+	environment.glow_bloom = 0.25
+	environment.glow_hdr_threshold = 1.1
+	environment.ssao_enabled = true
+	environment.ssao_radius = 1.5
+	environment.ssao_intensity = 1.8
+
+	var world_environment: WorldEnvironment = WorldEnvironment.new()
+	world_environment.name = "WorldEnvironment"
+	world_environment.environment = environment
+	root.add_child(world_environment)
+
+	var sun: DirectionalLight3D = DirectionalLight3D.new()
+	sun.name = "SunLight"
+	sun.rotation_degrees = Vector3(-48.0, 35.0, 0.0)
+	sun.light_color = Color(1.0, 0.94, 0.84)
+	sun.light_energy = 1.35
+	sun.shadow_enabled = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	sun.directional_shadow_max_distance = 120.0
+	root.add_child(sun)
+
+
+## Builds the sky of the zone.
+func _build_sky() -> Sky:
+	var sky_material: ProceduralSkyMaterial = ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color(0.14, 0.32, 0.58)
+	sky_material.sky_horizon_color = Color(0.65, 0.78, 0.88)
+	sky_material.sky_curve = 0.12
+	sky_material.ground_bottom_color = Color(0.12, 0.14, 0.16)
+	sky_material.ground_horizon_color = Color(0.45, 0.52, 0.58)
+	sky_material.sun_angle_max = 35.0
+	var sky: Sky = Sky.new()
+	sky.sky_material = sky_material
+	return sky
 
 
 ## Finds a free position for a prop.
