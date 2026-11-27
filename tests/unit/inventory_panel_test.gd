@@ -51,7 +51,17 @@ func run() -> bool:
 	panel.update_view(inventory, equipment, 1)
 
 	var equipment_rows: VBoxContainer = panel.get_node("PanelRoot/EquipmentRows")
-	var inventory_rows: VBoxContainer = panel.get_node("PanelRoot/InventoryRows")
+	var scroll: ScrollContainer = panel.get_node("PanelRoot/InventoryScroll")
+	var inventory_rows: VBoxContainer = panel.get_node("PanelRoot/InventoryScroll/InventoryRows")
+	if scroll.custom_minimum_size.y <= 0.0:
+		push_error("The inventory list has no height to scroll in")
+		return false
+	if scroll.mouse_filter != Control.MOUSE_FILTER_STOP:
+		push_error("The inventory list must take the wheel of the mouse")
+		return false
+	if not scroll.follow_focus:
+		push_error("The inventory list must follow the focused item")
+		return false
 	if equipment_rows.get_child_count() != 6:
 		push_error("Inventory panel did not render all six equipment slots")
 		return false
@@ -91,5 +101,41 @@ func run() -> bool:
 	equipped_button.pressed.emit()
 	if _unequip_requests != ["weapon"]:
 		push_error("Inventory panel did not request the unequip action")
+		return false
+
+	# Selecting an item shows it in the status line and opens its action.
+	var item_button: Button = potion_row.get_node("ItemButton")
+	item_button.pressed.emit()
+	var selection_label: Label = panel.get_node("PanelRoot/SelectionRow/SelectedLabel")
+	var selection_button: Button = panel.get_node(
+		"PanelRoot/SelectionRow/SelectedActionButton"
+	)
+	if selection_label.text == tr("inventory_selected_empty"):
+		push_error("The inventory panel did not show the selected item")
+		return false
+	if selection_button.disabled:
+		push_error("The inventory panel did not offer the action of the selected item")
+		return false
+	selection_button.pressed.emit()
+	if _use_requests != ["minor_potion", "minor_potion"]:
+		push_error("The inventory panel did not use the selected item")
+		return false
+
+	# A full inventory has to be reachable with the wheel of the mouse.
+	var full_inventory: Array = []
+	for index: int in range(30):
+		full_inventory.append({"item_id": "minor_potion", "quantity": index + 1})
+	panel.update_view(full_inventory, equipment, 4)
+	var full_rows: VBoxContainer = panel.get_node(
+		"PanelRoot/InventoryScroll/InventoryRows"
+	)
+	if full_rows.get_child_count() != 30:
+		push_error("The inventory panel did not render a full inventory")
+		return false
+	if full_rows.get_combined_minimum_size().y <= scroll.custom_minimum_size.y:
+		push_error("A full inventory has to be taller than the visible list")
+		return false
+	if scroll.get_v_scroll_bar() == null:
+		push_error("The inventory list has no scroll bar")
 		return false
 	return true

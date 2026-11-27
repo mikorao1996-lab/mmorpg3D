@@ -56,6 +56,11 @@ var _second_wind_key_down: bool = false
 var _loot_key_down: bool = false
 var _interact_key_down: bool = false
 var _combat_message_time_remaining: float = 0.0
+var _target_blocked: bool = false
+
+const CAMERA_MIN_FOV: float = 35.0
+const CAMERA_MAX_FOV: float = 85.0
+const CAMERA_FOV_STEP: float = 5.0
 
 
 func _ready() -> void:
@@ -250,6 +255,9 @@ func _physics_process(delta: float) -> void:
 	var max_input_magnitude: float = float(_simulation_config["max_input_magnitude"])
 	if input_direction.length() > max_input_magnitude:
 		input_direction = input_direction.normalized() * max_input_magnitude
+	if input_direction.length_squared() > 0.0:
+		# The character moves again, so the target is chosen again.
+		_target_blocked = false
 
 	_predicted_position = MovementSimulationType.advance(
 		_predicted_position,
@@ -273,10 +281,12 @@ func _physics_process(delta: float) -> void:
 
 	var slash_key_pressed: bool = Input.is_key_pressed(KEY_SPACE)
 	if not player_is_defeated and slash_key_pressed and not _slash_key_down:
+		_target_blocked = false
 		_request_attack("starter_slash")
 	_slash_key_down = slash_key_pressed
 	var heavy_strike_key_pressed: bool = Input.is_key_pressed(KEY_E)
 	if not player_is_defeated and heavy_strike_key_pressed and not _heavy_strike_key_down:
+		_target_blocked = false
 		_request_attack("heavy_strike")
 	_heavy_strike_key_down = heavy_strike_key_pressed
 	var guard_break_key_pressed: bool = Input.is_key_pressed(KEY_Q)
@@ -307,6 +317,108 @@ func _physics_process(delta: float) -> void:
 	if chat_key_pressed and not _chat_key_down:
 		_toggle_chat_panel()
 	_chat_key_down = chat_key_pressed
+
+
+## Handles the input that the interface did not take.
+##
+## The wheel of the mouse zooms the camera only when the pointer is over the
+## world, so it scrolls the list under the pointer instead of moving the view.
+## The escape key closes the open windows first, and only then it drops the
+## target. A click over the world takes the focus away from the chat, so the
+## movement keys work right away.
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event: InputEventKey = event
+		if not key_event.pressed or key_event.echo:
+			return
+		if key_event.keycode == KEY_ESCAPE:
+			_handle_escape()
+			return
+		if key_event.keycode == KEY_F11:
+			_toggle_fullscreen()
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event: InputEventMouseButton = event
+	if not mouse_event.pressed:
+		return
+	if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_zoom_camera(-CAMERA_FOV_STEP, mouse_event.position)
+		return
+	if mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_zoom_camera(CAMERA_FOV_STEP, mouse_event.position)
+		return
+	if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+		if _is_position_over_interface(mouse_event.position):
+			return
+		chat_panel.release_input_focus()
+
+
+## Reports whether the pointer is over a part of the interface.
+##
+## The wheel of the mouse zooms the camera only over the world, so the wheel
+## over the list of the items scrolls the list instead of moving the view.
+func _is_pointer_over_interface() -> bool:
+	return get_viewport().gui_get_hovered_control() != null
+
+
+## Reports whether a position of the pointer is over a part of the interface.
+##
+## The position of the event is checked as well, because the position of the
+## mouse is not always known, for example in an automated test.
+func _is_position_over_interface(position: Vector2) -> bool:
+	if _is_pointer_over_interface():
+		return true
+	for panel: Control in _interface_panels():
+		if not panel.visible:
+			continue
+		if panel.get_global_rect().has_point(position):
+			return true
+	return false
+
+
+## Returns the panels of the interface that take the pointer.
+func _interface_panels() -> Array[Control]:
+	var panels: Array[Control] = []
+	panels.append(inventory_panel)
+	panels.append(chat_panel)
+	panels.append(npc_dialog_panel)
+	panels.append(quest_tracker_panel)
+	return panels
+
+
+## Zooms the camera in or out.
+func _zoom_camera(step: float, position: Vector2) -> void:
+	if _is_position_over_interface(position):
+		return
+	camera.fov = clampf(
+		camera.fov + step,
+		CAMERA_MIN_FOV,
+		CAMERA_MAX_FOV,
+	)
+
+
+## Closes the open windows, and drops the target when nothing was open.
+func _handle_escape() -> void:
+	if inventory_panel.visible:
+		inventory_panel.visible = false
+		return
+	if npc_dialog_panel.visible:
+		npc_dialog_panel.hide_panel()
+		return
+	_target_blocked = true
+	_update_target()
+
+
+## Switches the window between the fullscreen and the windowed mode.
+func _toggle_fullscreen() -> void:
+	var is_fullscreen: bool = (
+		DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	)
+	if is_fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		return
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 
 func _process(_delta: float) -> void:
@@ -656,6 +768,10 @@ func _update_target() -> void:
 		if distance_squared < nearest_distance_squared:
 			nearest_distance_squared = distance_squared
 			target_mob_id = mob_id
+	if _target_blocked:
+		# The player dropped the target with the escape key, so nothing is
+		# chosen until the character moves or fights again.
+		target_mob_id = ""
 	_target_mob_id = target_mob_id
 	if target_mob_id.is_empty():
 		hud.hide_target()

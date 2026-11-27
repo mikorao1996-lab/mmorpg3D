@@ -17,6 +17,8 @@ var elapsed_seconds: float = 0.0
 var loot_granted: bool = false
 var panel_showed_inventory: bool = false
 var use_request_rejected: bool = false
+var input_stage: int = 0
+var camera_fov_before: float = 0.0
 
 const TEST_PORT: int = 7791
 
@@ -71,6 +73,9 @@ func _process(delta: float) -> void:
 
 	if authenticated_peer_id != 0 and not loot_granted:
 		loot_granted = _grant_loot()
+		if loot_granted:
+			input_stage = 1
+			camera_fov_before = (client_scene.get_node("Camera3D") as Camera3D).fov
 
 	if loot_granted and not panel_showed_inventory:
 		panel_showed_inventory = _check_panel_state()
@@ -78,15 +83,21 @@ func _process(delta: float) -> void:
 	if panel_showed_inventory:
 		_check_use_request()
 
+	if loot_granted and input_stage > 0 and input_stage < 4:
+		_check_input_separation()
+
 	if (
 		panel_showed_inventory
 		and use_request_rejected
+		and input_stage >= 4
 	):
 		print("CLIENT_UI_LOOPBACK_OK")
 		get_tree().quit(0)
 	elif elapsed_seconds > 8.0:
 		var equipment_rows: VBoxContainer = panel.get_node("PanelRoot/EquipmentRows")
-		var inventory_rows: VBoxContainer = panel.get_node("PanelRoot/InventoryRows")
+		var inventory_rows: VBoxContainer = panel.get_node(
+			"PanelRoot/InventoryScroll/InventoryRows"
+		)
 		print(
 			"CLIENT_UI_STATE peer=%d loot=%s gear_rows=%d inventory_rows=%s rejected=%s status=%s"
 			% [
@@ -125,14 +136,18 @@ func _grant_loot() -> bool:
 ## granted loot stacks.
 func _check_panel_state() -> bool:
 	var equipment_rows: VBoxContainer = panel.get_node("PanelRoot/EquipmentRows")
-	var inventory_rows: VBoxContainer = panel.get_node("PanelRoot/InventoryRows")
+	var inventory_rows: VBoxContainer = panel.get_node(
+		"PanelRoot/InventoryScroll/InventoryRows"
+	)
 	if equipment_rows.get_child_count() != 6:
 		return false
 	return inventory_rows.get_child_count() >= 2
 
 
 func _check_use_request() -> void:
-	var inventory_rows: VBoxContainer = panel.get_node("PanelRoot/InventoryRows")
+	var inventory_rows: VBoxContainer = panel.get_node(
+		"PanelRoot/InventoryScroll/InventoryRows"
+	)
 	if inventory_rows.get_child_count() < 2:
 		return
 	var potion_row: HBoxContainer = inventory_rows.get_child(0)
@@ -152,6 +167,56 @@ func _check_use_request() -> void:
 
 func _on_player_authenticated(peer_id: int) -> void:
 	authenticated_peer_id = peer_id
+
+
+## Checks that the interface and the world do not fight over the input.
+##
+## The wheel of the mouse over the list of the items scrolls the list and does
+## not move the camera, over the world it zooms the camera, and the escape key
+## closes the open window.
+func _check_input_separation() -> void:
+	var camera: Camera3D = client_scene.get_node("Camera3D")
+	match input_stage:
+		1:
+			if not is_equal_approx(camera.fov, camera_fov_before):
+				push_error("The wheel of the mouse over the interface moved the camera")
+				get_tree().quit(1)
+				return
+			camera_fov_before = camera.fov
+			_push_wheel(Vector2(200.0, 200.0), MOUSE_BUTTON_WHEEL_UP)
+			input_stage = 2
+		2:
+			if is_equal_approx(camera.fov, camera_fov_before):
+				push_error("The wheel of the mouse over the world did not move the camera")
+				get_tree().quit(1)
+				return
+			_push_key(KEY_ESCAPE)
+			input_stage = 3
+		3:
+			if panel.visible:
+				push_error("The escape key did not close the inventory panel")
+				get_tree().quit(1)
+				return
+			input_stage = 4
+
+
+## Sends a wheel event to the client.
+func _push_wheel(position: Vector2, button_index: int) -> void:
+	var event: InputEventMouseButton = InputEventMouseButton.new()
+	event.button_index = button_index
+	event.pressed = true
+	event.position = position
+	event.global_position = position
+	get_viewport().push_input(event, true)
+
+
+## Sends a key event to the client.
+func _push_key(keycode: int) -> void:
+	var event: InputEventKey = InputEventKey.new()
+	event.keycode = keycode
+	event.physical_keycode = keycode
+	event.pressed = true
+	get_viewport().push_input(event, true)
 
 
 func _on_movement_intent(peer_id: int, input_direction: Vector2) -> void:

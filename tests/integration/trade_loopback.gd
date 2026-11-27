@@ -168,7 +168,9 @@ func _try_buy_item() -> bool:
 
 ## Presses the equip button of the bought item.
 func _try_equip_item() -> bool:
-	var inventory_rows: VBoxContainer = inventory_panel.get_node("PanelRoot/InventoryRows")
+	var inventory_rows: VBoxContainer = inventory_panel.get_node(
+		"PanelRoot/InventoryScroll/InventoryRows"
+	)
 	for row: Node in inventory_rows.get_children():
 		if not row is HBoxContainer:
 			continue

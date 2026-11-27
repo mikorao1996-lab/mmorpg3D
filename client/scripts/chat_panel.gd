@@ -428,6 +428,16 @@ func is_input_focused() -> bool:
 	return _input != null and _input.has_focus()
 
 
+## Takes the focus away from the chat input.
+##
+## A click over the world calls it, so the movement keys work right away
+## instead of typing into the chat.
+func release_input_focus() -> void:
+	if _input == null:
+		return
+	_input.release_focus()
+
+
 ## Reports whether the history contains a message with the given text.
 func has_message_with_text(text: String) -> bool:
 	for message: Dictionary in _messages:

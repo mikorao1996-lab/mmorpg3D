@@ -100,7 +100,13 @@ the quest is ready to be handed in, `?` when it is available), and a compact
 bar of the health that shows up only when the entity was hit or when it is
 the target. The damage and the healing float up over the entity as numbers.
 The panels of the interface can be hidden: **I** toggles the inventory panel,
-**C** toggles the chat panel.
+**C** toggles the chat panel. The window opens at 1600×900 and can be resized:
+the interface scales with it and never gets cut. **Esc** closes the open
+windows one by one and drops the target when nothing is open, **F11** switches
+between the windowed and the fullscreen mode, the wheel of the mouse zooms the
+camera over the world and scrolls the list under the pointer over the
+interface, and a click over the world takes the focus away from the chat, so
+the movement keys work right away.
 
 The interface of the client is a heads-up display of the usual MMO kind, and it
 is built in code so it can be checked without the editor:
@@ -139,7 +145,11 @@ if defeated. After a zone transfer, the entry position becomes that zone's
 respawn point.
 
 The inventory panel on the right shows the six equipment slots, the carried
-items, their level requirements, and their stat bonuses. **Equip** sends an
+items, their level requirements, and their stat bonuses. The list of the
+carried items scrolls, so a full inventory is always reachable with the wheel
+of the mouse. Clicking an item selects it: the item is shown in the status
+line under the list together with its bonuses, and the panel offers its
+action; a double click acts on the item right away. **Equip** sends an
 `EQUIP_ITEM` request, clicking a filled gear slot sends `UNEQUIP_ITEM`, and
 **Use** on a consumable sends `USE_ITEM`. The server decides whether the
 request is accepted; the panel only renders the authoritative snapshot, so an
@@ -232,7 +242,10 @@ item-use rejections (a non-consumable and an item that is not carried).
 The second integration scene loads the production client scene against an
 in-process server and verifies that a snapshot reaches the inventory panel:
 six gear slots, the granted loot stacks, and a consumable use request that the
-server rejects while the player is at full health.
+server rejects while the player is at full health. It also checks that the
+interface and the world do not fight over the input: the wheel of the mouse
+over the panel scrolls the list and does not move the camera, over the world
+it zooms the camera, and the escape key closes the open window.
 
 The third integration scene walks the full quest cycle against the production
 client scene: talk to the NPC, accept the quest, defeat the target mob, and

@@ -28,6 +28,7 @@ offset_right = 300.0
 offset_bottom = -114.0
 grow_horizontal = 2
 grow_vertical = 0
+mouse_filter = 2
 
 [node name="StatusLabel" type="Label" parent="StatusCanvas/StatusPanel"]
 layout_mode = 2
@@ -75,8 +76,8 @@ script = ExtResource("6")
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -300.0
-offset_top = 280.0
+offset_left = -324.0
+offset_top = 268.0
 offset_right = -24.0
 offset_bottom = -100.0
 grow_horizontal = 0
@@ -88,11 +89,12 @@ script = ExtResource("2")
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -300.0
+offset_left = -324.0
 offset_top = 76.0
 offset_right = -24.0
-offset_bottom = 264.0
+offset_bottom = 256.0
 grow_horizontal = 0
+mouse_filter = 2
 script = ExtResource("3")
 
 [node name="NpcDialogPanel" type="PanelContainer" parent="QuestCanvas"]
